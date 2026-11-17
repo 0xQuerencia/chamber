@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Task, Workspace, View, WorkFilter } from "./types";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import type { Workspace, View, WorkFilter } from "./types";
 
 type Props = {
   data: Workspace;
@@ -65,7 +65,7 @@ export default function ErpDesk({ data, today, onNavigate, onTask, onDocument }:
     {key:"review" as const,label:"Pending Review",value:reviewing.length},
     {key:"unassigned" as const,label:"Unassigned",value:unassigned.length}
   ];
-  function tableKeys(event: React.KeyboardEvent<HTMLTableSectionElement>) {
+  function tableKeys(event: KeyboardEvent<HTMLTableSectionElement>) {
     if (event.key==="ArrowDown") {event.preventDefault();setFocusIndex(i=>Math.min(i+1,sorted.length-1));}
     if (event.key==="ArrowUp") {event.preventDefault();setFocusIndex(i=>Math.max(i-1,0));}
     if (event.key==="Enter" && focusIndex>=0 && sorted[focusIndex]) {event.preventDefault();gotoRow(sorted[focusIndex].id);}
