@@ -61,6 +61,21 @@ const csv = await call("/api/export?kind=clients");
 assert.equal(csv.res.status,200);
 assert.ok(csv.body.includes("Shah & Co."));
 
+const template = ok(await call("/api/templates","POST",{name:"Monthly GST return",service:"GST",frequency:"monthly",due_day:15}));
+ok(await call("/api/enrollments","POST",{client_id:clientA.id,template_id:template.id,assignee_id:staff.id}));
+const generated = ok(await call("/api/recurrence","POST",{period:"2026-11"}));
+assert.equal(generated.created,1);
+const repeated = ok(await call("/api/recurrence","POST",{period:"2026-11"}));
+assert.equal(repeated.created,0);
+assert.equal(repeated.already,1);
+const nextPeriod = ok(await call("/api/recurrence","POST",{period:"2026-12"}));
+assert.equal(nextPeriod.created,1);
+snap=ok(await call("/api/bootstrap"));
+assert.equal(snap.templates.length,1);
+assert.equal(snap.enrollments.length,1);
+assert.equal(snap.tasks.filter(t=>t.title==="Monthly GST return").length,2);
+assert.equal(snap.tasks.find(t=>t.period==="2026-11")?.due_date,"2026-12-15");
+
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");
