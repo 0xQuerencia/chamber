@@ -149,10 +149,13 @@ function renderDocumentDetail(d){
 function renderCompliance(){
  const due=S.data.tasks.filter(t=>t.due_date&&t.status!=="done").slice().sort((a,b)=>a.due_date.localeCompare(b.due_date));
  const rows=due.map(t=>'<tr><td><button class="cell-link" data-task="'+esc(t.id)+'">'+esc(clientOf(t.client_id))+'</button></td><td>'+esc(t.service)+'</td><td>'+esc(t.period||"—")+'</td><td class="nowrap">'+pretty(t.due_date)+'</td><td>'+tag(t.status)+'</td></tr>');
- return heading("Compliance Calendar","Assignment deadlines and reporting periods",btn(icon("plus")+" New assignment","modal:task","primary"))+
- '<div class="notice" style="margin-bottom:18px">This is a calendar of firm-entered assignment dates, not a verified statutory due-date service. Recurring templates and legally verified filing deadlines require a separate implementation and review.</div>'+
- panel("Upcoming deadlines",table(["Client","Service","Period","Due date","Status"],rows,"No due dates yet","Create work with a due date to populate this calendar."))+
- '<div style="margin-top:14px">'+panel("Recurring service templates",S.data.templates.length?S.data.templates.map(t=>'<div class="stats-line"><div class="grow"><strong>'+esc(t.name)+'</strong><div class="hint">'+esc(t.frequency)+' · '+esc(t.service)+'</div></div></div>').join(""):'<div class="empty"><strong>Recurrence not configured</strong><p>Automated generation is planned in the next phase.</p></div>')+'</div>';
+ const tpls=S.data.templates||[],enrolls=S.data.enrollments||[];
+ const templates=tpls.length?tpls.map(t=>'<div class="stats-line"><div class="grow"><strong class="small">'+esc(t.name)+'</strong><div class="hint">'+esc(t.frequency)+' · '+esc(t.service)+' · Planning due day '+esc(t.due_day)+'</div></div><span class="badge-number">'+enrolls.filter(e=>e.template_id===t.id&&e.active).length+' clients</span></div>').join(""):'<div class="empty"><strong>No recurring templates yet</strong><p>Define monthly or quarterly work, then enroll clients.</p></div>';
+ const actions=permitted()?btn(icon("plus")+" New template","modal:template","primary")+btn("Enroll client","modal:enrollment"):"";
+ const generation=permitted()?'<div class="toolbar" style="margin-top:14px"><label class="small" for="period-picker">Generate work for period</label><input class="control" id="period-picker" type="month" value="'+today().slice(0,7)+'">'+btn("Generate assignments","generate-period")+'</div>':"";
+ return heading("Compliance Calendar","Scheduled assignment periods and firm-planned deadlines",actions)+
+ '<div class="notice" style="margin-bottom:18px">Recurring deadlines are internal planning dates set by the firm, not verified legal or statutory filing deadlines. Always check applicable official notifications.</div>'+
+ '<div class="split-grid">'+panel("Recurring service templates",templates+generation)+panel("Upcoming deadlines",table(["Client","Service","Period","Due date","Status"],rows,"No due dates yet","Generate recurring work or create an assignment."))+'</div>';
 }
 function renderTeam(){
  const members=S.data.staff,ts=S.data.tasks;
@@ -174,7 +177,7 @@ function renderReports(){
  panel("Work by staff",table(["Staff","Open","Completed","In review"],rows,"No team records","Staff records will appear here."));
 }
 function renderActivity(){
- const events=S.data.activity.map(a=>'<div class="event"><strong>'+esc(a.actor_name||"Unknown member")+' · '+esc(a.event)+' '+esc(a.entity_type)+'</strong><p>'+esc(a.entity_type)+" · "+esc(a.entity_id.slice(0,8))+'</p><time>'+pretty(a.at)+' · '+esc(new Date(a.at).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}))+'</time></div>').join("");
+ const events=S.data.activity.map(a=>'<div class="event"><strong>'+esc(a.actor_name||"Automation")+' · '+esc(a.event)+' '+esc(a.entity_type)+'</strong><p>'+esc(a.entity_type)+" · "+esc(a.entity_id.slice(0,8))+'</p><time>'+pretty(a.at)+' · '+esc(new Date(a.at).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}))+'</time></div>').join("");
  return heading("Activity & Sync","Timestamped work changes and system status",btn(icon("refresh")+" Refresh","refresh"))+
  '<div class="split-grid">'+panel("Activity trail",'<div class="timeline">'+(events||'<div class="empty"><strong>No activity recorded</strong><p>Creating and updating work creates audit entries.</p></div>')+'</div>')+
  panel("System status",'<div class="stats-line"><span class="green-dot"></span><strong class="small">Connected to Chamber API</strong></div><div class="stats-line"><div class="grow"><strong class="small">Data source</strong><div class="hint">Cloudflare D1 database</div></div></div><div class="stats-line"><div class="grow"><strong class="small">Last loaded</strong><div class="hint">'+esc(S.loadedAt||"Not loaded")+'</div></div></div><div class="notice">Email and WhatsApp integrations are not configured. Do not treat drafted or copied messages as delivered.</div>')+'</div>';
@@ -225,6 +228,17 @@ function modal(){
   content=choose("Assignment","task_id",tasks.map(t=>[t.id,clientOf(t.client_id)+" · "+t.title]))+
    field("Required document","name","text",true)+
    '<p class="hint" style="grid-column:1/-1">The requirement starts as Missing. Mark it requested or received after taking that action.</p>';
+ }else if(S.modal==="template"){
+  title="New recurring work template";
+  content=field("Template title (e.g. Monthly GST filing)","name","text",true)+field("Service","service","text",true)+
+   choose("Frequency","frequency",[["monthly","Monthly"],["quarterly","Quarterly"],["annual","Annual"]])+
+   field("Planning due day of following period (1–28)","due_day","number",true,'min="1" max="28" value="15"')+
+   '<p class="hint" style="grid-column:1/-1">This date is for internal planning only. It must not be represented as a statutory filing date.</p>';
+ }else if(S.modal==="enrollment"){
+  title="Enroll client in recurring work";
+  content=choose("Client","client_id",S.data.clients.map(c=>[c.id,c.name]))+
+   choose("Template","template_id",(S.data.templates||[]).map(t=>[t.id,t.name+" · "+t.frequency]))+
+   choose("Default assignee","assignee_id",[["","Unassigned"],...S.data.staff.map(u=>[u.id,u.name])],false);
  }else if(S.modal==="staff"){
   title="Add firm member";
   content=field("Full name","name","text",true)+field("Work email","email","email",true)+
@@ -275,7 +289,7 @@ function flash(message){S.toast=message;render();setTimeout(()=>{S.toast="";rend
 function navTo(view){S.view=view;S.selected=null;S.filter="all";S.q="";S.error="";render();}
 function openModal(kind){
  if(!S.data)return;S.error="";
- if((kind==="client"||kind==="task")&&!permitted())return flash("Only managers can create this record.");
+ if((["client","task","template","enrollment"].includes(kind))&&!permitted())return flash("Only managers can create this record.");
  if(kind==="staff"&&S.data.user.role!=="principal")return flash("Only principals can add staff.");
  S.modal=kind;render();
 }
@@ -293,6 +307,8 @@ async function submitForm(form){
   if(kind==="task")await api("/api/tasks","POST",payload);
   if(kind==="document")await api("/api/documents","POST",payload);
   if(kind==="staff")await api("/api/staff","POST",payload);
+  if(kind==="template")await api("/api/templates","POST",payload);
+  if(kind==="enrollment")await api("/api/enrollments","POST",payload);
   S.modal=null;S.selected=null;S.error="";await load();flash("Record saved.");
  }catch(e){S.error=e.message;render();}
  finally{if(submit)submit.disabled=false;}
@@ -331,6 +347,7 @@ root.addEventListener("click",async event=>{
  if(action==="close-modal"){S.modal=null;S.error="";render();return;}
  if(action==="close-detail"){S.selected=null;render();return;}
  if(action==="refresh"){try{await load();flash("Records refreshed.");}catch(e){flash(e.message);}return;}
+ if(action==="generate-period"){try{const period=root.querySelector("#period-picker")?.value;if(!period)return flash("Choose a period first.");const outcome=await api("/api/recurrence","POST",{period});await load();flash(outcome.created+" assignments created; "+outcome.already+" already existed.");}catch(e){flash(e.message);}return;}
  if(action==="global-search"){navTo("work");root.querySelector("#main-search")?.focus();return;}
  if(action==="logout"){try{await api("/api/logout","POST",{});S.session={authenticated:false,needs_setup:false};S.data=null;S.modal=null;S.toast="";render();}catch(e){flash(e.message);}return;}
  if(action.startsWith("export:")){
