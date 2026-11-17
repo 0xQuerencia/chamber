@@ -101,7 +101,7 @@ async function handleLogin(request, env) {
 }
 async function bootstrap(db, user) {
   const privileged = isPrivileged(user);
-  const [firm, staff, clients, tasks, documents, activity, templates] = await Promise.all([
+  const [firm, staff, clients, tasks, documents, activity, templates, enrollments] = await Promise.all([
     db.prepare("SELECT id,name FROM firms WHERE id=?").bind(user.firm_id).first(),
     db.prepare("SELECT id,name,email,role,active FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
     (privileged
@@ -114,13 +114,14 @@ async function bootstrap(db, user) {
       ? db.prepare("SELECT * FROM documents WHERE firm_id=? ORDER BY updated_at DESC LIMIT 3000").bind(user.firm_id)
       : db.prepare("SELECT d.* FROM documents d JOIN tasks t ON t.id=d.task_id AND t.firm_id=d.firm_id WHERE d.firm_id=? AND t.assignee_id=? ORDER BY d.updated_at DESC LIMIT 3000").bind(user.firm_id,user.id)).all(),
     (privileged
-      ? db.prepare("SELECT a.*,u.name AS actor_name FROM activity a JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id)
-      : db.prepare("SELECT a.*,u.name AS actor_name FROM activity a JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
-    db.prepare("SELECT id,name,service,frequency,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all()
+      ? db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id)
+      : db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
+    db.prepare("SELECT id,name,service,frequency,due_day,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
+    (privileged?db.prepare("SELECT * FROM service_enrollments WHERE firm_id=?").bind(user.firm_id):db.prepare("SELECT * FROM service_enrollments WHERE firm_id=? AND assignee_id=?").bind(user.firm_id,user.id)).all()
   ]);
   return output({ firm, user: { id:user.id, name:user.name, email:user.email, role:user.role },
     staff: staff.results, clients: clients.results, tasks: tasks.results,
-    documents: documents.results, activity: activity.results, templates: templates.results });
+    documents: documents.results, activity: activity.results, templates: templates.results, enrollments: enrollments.results });
 }
 async function validateFirmUser(db, firmId, userId) {
   if (!userId) return true;
@@ -222,6 +223,91 @@ async function handleCreateStaff(data,env,user) {
   } catch(e) {if(String(e).includes("UNIQUE"))return fail("Email already used",409);throw e;}
   return output({id:userId},201);
 }
+function calendarPeriod(ym, frequency) {
+  const match=/^(\d{4})-(0[1-9]|1[0-2])$/.exec(ym);
+  if (!match) return null;
+  const year=Number(match[1]), month=Number(match[2]);
+  if(year<2020||year>2100)return null;
+  if(frequency==="monthly")return ym;
+  if(frequency==="quarterly")return year+"-Q"+Math.ceil(month/3);
+  if(frequency==="annual")return String(year);
+  return null;
+}
+function plannedDueDate(ym,frequency,day) {
+  const parts=ym.split("-").map(Number);
+  const y=parts[0],m=parts[1],n=Math.max(1,Math.min(28,Number(day)||15));
+  let date;
+  if(frequency==="monthly")date=new Date(Date.UTC(y,m,n));
+  else if(frequency==="quarterly")date=new Date(Date.UTC(y,Math.ceil(m/3)*3,n));
+  else date=new Date(Date.UTC(y+1,0,n));
+  return date.toISOString().slice(0,10);
+}
+async function handleCreateTemplate(data,env,user){
+  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  const name=clean(data.name,120),service=clean(data.service,80),frequency=String(data.frequency||"");
+  const day=Number(data.due_day);
+  if(!name||!service||!["monthly","quarterly","annual"].includes(frequency)||!Number.isInteger(day)||day<1||day>28)return fail("Valid name, service, frequency and planning day (1–28) required");
+  const templateId=id();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO service_templates(id,firm_id,name,service,frequency,due_day,active,created_at) VALUES (?,?,?,?,?,?,1,?)")
+      .bind(templateId,user.firm_id,name,service,frequency,day,iso()),
+    await audit(env.DB,user,"created","template",templateId,{frequency})
+  ]);
+  return output({id:templateId},201);
+}
+async function handleEnroll(data,env,user){
+  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  const clientId=clean(data.client_id,100),templateId=clean(data.template_id,100),assigneeId=clean(data.assignee_id,100);
+  const [clientRecord,templateRecord,validUser]=await Promise.all([
+    env.DB.prepare("SELECT id FROM clients WHERE firm_id=? AND id=?").bind(user.firm_id,clientId).first(),
+    env.DB.prepare("SELECT id FROM service_templates WHERE firm_id=? AND id=? AND active=1").bind(user.firm_id,templateId).first(),
+    validateFirmUser(env.DB,user.firm_id,assigneeId)
+  ]);
+  if(!clientRecord||!templateRecord||!validUser)return fail("Invalid client, template or assignee");
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO service_enrollments(id,firm_id,client_id,template_id,assignee_id,active,created_at) VALUES (?,?,?,?,?,1,?) ON CONFLICT(firm_id,client_id,template_id) DO UPDATE SET assignee_id=excluded.assignee_id,active=1")
+      .bind(id(),user.firm_id,clientId,templateId,assigneeId||null,iso()),
+    await audit(env.DB,user,"enrolled","template",templateId,{client_id:clientId})
+  ]);
+  return output({ok:true},201);
+}
+async function generatePeriod(db,ym,firmId=null,actorId=null) {
+  if(!calendarPeriod(ym,"monthly"))throw Error("Invalid work period");
+  const query=firmId
+    ?db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.firm_id=? AND e.active=1 AND t.active=1 LIMIT 2000").bind(firmId)
+    :db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.active=1 AND t.active=1 LIMIT 2000");
+  const records=(await query.all()).results;
+  let created=0,already=0;
+  for(const row of records) {
+    const period=calendarPeriod(ym,row.frequency);
+    const exists=await db.prepare("SELECT id FROM recurrence_runs WHERE firm_id=? AND template_id=? AND client_id=? AND period=?").bind(row.firm_id,row.template_id,row.client_id,period).first();
+    if(exists){already++;continue;}
+    const taskId=id(),at=iso(),due=plannedDueDate(ym,row.frequency,row.due_day);
+    try {
+      await db.batch([
+        db.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,assignee_id,priority,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(taskId,row.firm_id,row.client_id,row.name,row.service,period,due,row.assignee_id||null,"medium","todo","Planning date only; verify statutory filing dates separately.",at,at),
+        db.prepare("INSERT INTO recurrence_runs(id,firm_id,template_id,client_id,period,task_id,created_at) VALUES (?,?,?,?,?,?,?)")
+          .bind(id(),row.firm_id,row.template_id,row.client_id,period,taskId,at),
+        db.prepare("INSERT INTO activity(id,firm_id,actor_id,event,entity_type,entity_id,details,at) VALUES (?,?,?,?,?,?,?,?)")
+          .bind(id(),row.firm_id,actorId||null,actorId?"generated":"system_generated","task",taskId,JSON.stringify({period,template_id:row.template_id}),at)
+      ]);
+      created++;
+    }catch(error){
+      if(/UNIQUE|constraint failed/.test(String(error)))already++;
+      else throw error;
+    }
+  }
+  return {created,already,checked:records.length};
+}
+async function handleGenerate(data,env,user){
+  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  const period=clean(data.period,7);
+  if(!calendarPeriod(period,"monthly"))return fail("Period must be YYYY-MM");
+  const result=await generatePeriod(env.DB,period,user.firm_id,user.id);
+  return output(result);
+}
+
 async function handleExport(request,env,user) {
   if (!isPrivileged(user)) return fail("Insufficient permission",403);
   const kind=new URL(request.url).searchParams.get("kind");
@@ -260,6 +346,9 @@ async function api(request,env) {
     if(path==="/api/tasks"&&method==="POST") return handleCreateTask(await bodyJSON(request),env,user);
     if(path==="/api/documents"&&method==="POST") return handleCreateDocument(await bodyJSON(request),env,user);
     if(path==="/api/staff"&&method==="POST") return handleCreateStaff(await bodyJSON(request),env,user);
+    if(path==="/api/templates"&&method==="POST") return handleCreateTemplate(await bodyJSON(request),env,user);
+    if(path==="/api/enrollments"&&method==="POST") return handleEnroll(await bodyJSON(request),env,user);
+    if(path==="/api/recurrence"&&method==="POST") return handleGenerate(await bodyJSON(request),env,user);
     if(path==="/api/export"&&method==="GET") return handleExport(request,env,user);
     const taskMatch=path.match(/^\/api\/tasks\/([a-f0-9-]+)$/);
     if(taskMatch&&method==="PATCH") return handleUpdateTask(taskMatch[1],await bodyJSON(request),env,user);
@@ -273,6 +362,10 @@ async function api(request,env) {
   }
 }
 export default {
+  async scheduled(controller,env,ctx) {
+    if(!env.DB)return;
+    ctx.waitUntil(generatePeriod(env.DB,new Date().toISOString().slice(0,7)).catch(error=>console.error("Chamber recurrence failure",error.message)));
+  },
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
     if(path.startsWith("/api/")) return api(request,env);
