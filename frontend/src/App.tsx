@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ChevronRight, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, ShieldAlert, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ChevronRight, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
 import DeskWorkspace from "./DeskWorkspace";
@@ -158,9 +158,9 @@ export default function App(){
    const clients:CommandOption[]=workspace.clients.map(c=>({id:"client-"+c.id,group:"Clients",title:c.name,hint:c.category,onSelect:()=>{navigate("clients");setSelected(c.id)}}));
    const docs:CommandOption[]=workspace.documents.map(d=>({id:"document-"+d.id,group:"Documents",title:d.name,hint:clientName(d.client_id)+" · "+statusLabel(d.status),onSelect:()=>{navigate("documents");setSelected(d.id)}}));
    const actions:CommandOption[]=preview||!privileged?[]:[
-     {id:"create-task",group:"Actions",title:"Create assignment",hint:"Add work for a client",onSelect:()=>open("task")},
-     {id:"create-client",group:"Actions",title:"Create client",hint:"Add to Client Master",onSelect:()=>open("client")},
-     {id:"create-document",group:"Actions",title:"Add document requirement",hint:"Track missing data",onSelect:()=>open("document")}
+     {id:"create-task",group:"Actions",title:"Create assignment",hint:"Add work for a client",onSelect:()=>{setError("");setModal("task")}},
+     {id:"create-client",group:"Actions",title:"Create client",hint:"Add to Client Master",onSelect:()=>{setError("");setModal("client")}},
+     {id:"create-document",group:"Actions",title:"Add document requirement",hint:"Track missing data",onSelect:()=>{setError("");setModal("document")}}
    ];
    return [...nav,...actions,...tasks,...clients,...docs];
  // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,14 +273,63 @@ export default function App(){
  if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "clients":page=showClients();break;case "documents":page=showDocuments();break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  if(!session.authenticated||!workspace)return <Authentication needsSetup={session.needs_setup} onSubmit={handleAuth} error={error} busy={busy} onPreview={enterPreview}/>;
- return <div className="app-layout">
-  <header className="topbar"><div className="brand"><span className="brand-mark"><BriefcaseBusiness size={22}/></span>CHAMBER</div><div className="breadcrumb">/ <strong>{navItems.find(n=>n.id===view)?.label}</strong></div>{preview&&<span className="tag review">SAMPLE PREVIEW</span>}<span className="fy">FY {fyNow()}</span>
-   <button className="header-search" onClick={()=>{navigate("work");window.setTimeout(()=>document.getElementById("register-search")?.focus(),0)}}><Search size={17}/> Search clients, work, documents… <kbd>Ctrl K</kbd></button><Bell size={18} aria-label="Notifications (coming soon)"/><div className="top-user"><Avatar name={workspace.user.name}/><div><div className="name">{workspace.user.name}</div><small>{workspace.user.role}</small></div></div>
+ const groups:{name:string;items:View[]}[]=[
+  {name:"WORKSPACE",items:["desk","work","clients","documents"]},
+  {name:"OPERATIONS",items:["compliance","team","reports"]},
+  {name:"SYSTEM",items:["activity","settings"]}
+ ];
+ const navCounts:Partial<Record<View,number>>={
+  work:workspace.tasks.filter(t=>t.status!=="done").length,
+  documents:workspace.documents.filter(d=>["missing","requested","rejected"].includes(d.status)).length,
+  activity:workspace.activity.length
+ };
+ const selectedPage=navItems.find(n=>n.id===view)?.label||"Desk";
+ return <div className={"app-layout ca-experience" + (mobileNavOpen?" mobile-open":"")}>
+  <a className="skip-link" href="#main-content">Skip to main content</a>
+  {mobileNavOpen&&<button className="mobile-nav-backdrop" aria-label="Close navigation" onClick={()=>setMobileNavOpen(false)}/>}
+  <aside className="sidebar" aria-label="Primary navigation">
+    <div className="sidebar-brand"><span className="sidebar-logo"><BriefcaseBusiness size={21}/></span><span className="sidebar-brand-word"><strong>chamber</strong><small>PRACTICE OPERATIONS</small></span><button className="sidebar-mobile-close" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"><X size={18}/></button></div>
+    <div className="sidebar-context"><span className="context-monogram">{workspace.firm.name.slice(0,1).toUpperCase()}</span><span className="context-copy"><strong title={workspace.firm.name}>{workspace.firm.name}</strong><small>Firm workspace</small></span><ChevronRight size={15} className="sidebar-context-chevron"/></div>
+    <div className="sidebar-navigation">
+      {groups.map(group=><div className="side-nav-section" key={group.name}>
+        <div className="side-nav-heading">{group.name}</div>
+        {group.items.map(id=>{const item=navItems.find(n=>n.id===id)!;const Icon=item.icon;const count=navCounts[id]??0;
+          return <button key={id} className={"side-link "+(view===id?"active":"")} onClick={()=>navigate(id)} title={item.label} aria-current={view===id?"page":undefined}>
+            <Icon size={18} strokeWidth={1.85}/><span>{item.label}</span>
+            {count>0&&<span className="side-link-count">{count>99?"99+":count}</span>}
+          </button>;
+        })}
+      </div>)}
+    </div>
+    <div className="sidebar-spacer"/>
+    <div className="sidebar-support">
+      <button onClick={()=>setCommandOpen(true)}><Search size={16}/> Quick search <kbd>⌘K</kbd></button>
+      <div className="sidebar-bottom-account"><Avatar name={workspace.user.name}/><span><strong title={workspace.user.name}>{workspace.user.name}</strong><small>{workspace.user.role}</small></span><button aria-label="Open settings" title="Account settings" onClick={()=>navigate("settings")}><Settings size={16}/></button></div>
+    </div>
+  </aside>
+  <header className="topbar">
+    <button className="mobile-menu-button" onClick={()=>setMobileNavOpen(true)} aria-label="Open navigation"><Menu size={21}/></button>
+    <span className="mobile-top-brand">chamber</span>
+    <div className="breadcrumb"><span className="breadcrumb-root">WORKSPACE</span><ChevronRight size={15}/><strong>{selectedPage}</strong></div>
+    <button className="header-search" onClick={()=>setCommandOpen(true)} aria-label="Search across clients, tasks, and documents">
+      <Search size={17}/><span>Search clients, tasks, documents…</span><kbd>Ctrl K</kbd>
+    </button>
+    <div className="header-right">
+      {preview&&<span className="preview-indicator">SAMPLE</span>}
+      <span className="fy">FY {fyNow()}</span>
+      <button className="topbar-action" title="View recent activity" aria-label="View recent activity" onClick={()=>navigate("activity")}><ActivityIcon size={18}/></button>
+      <div className="top-user"><Avatar name={workspace.user.name}/><div><div className="name">{workspace.user.name}</div><small>{workspace.user.role}</small></div></div>
+    </div>
   </header>
-  <aside className="sidebar" aria-label="Main navigation">{navItems.map(({id,label,icon:Icon})=><button key={id} className={"side-link "+(view===id?"active":"")} onClick={()=>navigate(id)} aria-current={view===id?"page":undefined}><Icon size={19}/><span>{label}</span></button>)}<div className="sidebar-spacer"/><div className="firm-foot"><BriefcaseBusiness size={20}/><div><strong>{workspace.firm.name}</strong><br/><small>Firm workspace</small></div></div></aside>
-  <main className="main-area"><SectionMotion identity={view} key={view}>{page}</SectionMotion>{error&&workspace&&<div className="alert" style={{marginTop:20}} role="alert">{error}</div>}</main>
-  <footer className="statusbar"><ShieldAlert size={14}/> F1–F4: Navigate <span>·</span> Alt+N: New work <span>·</span> Ctrl+K: Search <span className="push"><span className="green-dot"/>{preview?"Sample mode · read only":"Connected"}</span></footer>
+  <main id="main-content" className="main-area" tabIndex={-1}><SectionMotion identity={view} key={view}>{page}</SectionMotion>
+    {error&&workspace&&<div className="alert" style={{marginTop:20}} role="alert">{error}</div>}
+  </main>
+  <footer className="statusbar"><span className="status-message"><span className="green-dot"/>{preview?"Read-only sample":"Firm workspace"}</span>
+    <span className="statusbar-divider">|</span> <span>F1–F4 navigate</span><span className="statusbar-divider">·</span><span>Alt+N new work</span><span className="statusbar-divider">·</span><span>Ctrl+K search</span>
+    <span className="push">CHAMBER <span className="statusbar-version">/ OPERATIONS</span></span>
+  </footer>
   {modal&&<RecordForm kind={modal} workspace={workspace} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
+  {commandOpen&&<CommandPalette options={commands} onClose={()=>setCommandOpen(false)}/>}
   {toast&&<div className="toast" role="status">{toast}</div>}
  </div>;
 }
