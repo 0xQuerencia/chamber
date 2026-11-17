@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ChevronRight, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
 import ErpDesk from "./ErpDesk";
