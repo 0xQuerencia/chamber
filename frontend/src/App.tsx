@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ChevronRight, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
-import DeskWorkspace from "./DeskWorkspace";
+import ErpDesk from "./ErpDesk";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
-import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, SectionMotion, StatusBadge, type Column } from "./components";
+import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, StatusBadge, type Column } from "./components";
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
 
 const navItems:{id:View;label:string;icon:typeof Home}[]=[
@@ -78,7 +78,7 @@ export default function App(){
  const [mobileNavOpen,setMobileNavOpen]=useState(false);
  const [docFilter,setDocFilter]=useState<"all"|DocumentStatus>("all");
  const [workSort,setWorkSort]=useState<"due"|"client"|"recent">("due");
- const today=new Date().toISOString().slice(0,10);
+ const today=(()=>{const now=new Date();const parts=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(now);const pick=(type:string)=>parts.find(part=>part.type===type)?.value||"";return pick("year")+"-"+pick("month")+"-"+pick("day")})();
  const principal=workspace?.user.role==="principal";
  const privileged=workspace?.user.role==="principal"||workspace?.user.role==="manager";
  const clientName=useCallback((id:string)=>workspace?.clients.find(c=>c.id===id)?.name??"Unknown client",[workspace]);
@@ -105,7 +105,7 @@ export default function App(){
    if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
    if(e.altKey&&e.key.toLowerCase()==="n"){e.preventDefault();if(!preview&&privileged)setModal("task");return}
    if(e.altKey&&e.key.toLowerCase()==="c"){e.preventDefault();if(!preview&&privileged)setModal("client");return}
-   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity"};
+   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance"};
    if(pages[e.key]){e.preventDefault();navigate(pages[e.key])}
   };
   document.addEventListener("keydown",handler);return()=>document.removeEventListener("keydown",handler);
@@ -191,12 +191,10 @@ export default function App(){
  function registerSearch(placeholder:string){return <input id="register-search" className="search" aria-label={placeholder} value={query} onChange={e=>setQuery(e.target.value)} placeholder={placeholder}/>}
  function previewBanner(){return preview?<div className="notice" style={{marginBottom:18}}>SAMPLE PREVIEW · Fictional records. All mutations, exports and messages are disabled. <button className="text-button" onClick={()=>window.location.assign("/")}>Exit preview</button></div>:null}
  function showDesk(){
-   return <>{previewBanner()}<DeskWorkspace workspace={workspace!} today={today}
-     preview={preview}
-     onNavigate={(page,filter)=>{navigate(page);if(filter)setWorkFilter(filter)}}
-     onTask={(id)=>{navigate("work");setSelected(id)}}
-     onDocument={(id)=>{navigate("documents");setSelected(id)}}
-     onNew={()=>open("task")}/></>;
+  return <>{previewBanner()}<ErpDesk data={workspace!} today={today}
+    onNavigate={(page,filter)=>{navigate(page);if(filter)setWorkFilter(filter)}}
+    onTask={id=>{navigate("work");setSelected(id)}}
+    onDocument={id=>{navigate("documents");setSelected(id)}}/></>;
  }
  function showWork(){
   const options:[WorkFilter,string][]=[["all","All work"],["mine","Assigned to me"],["todo","Pending"],["waiting","Waiting"],["review","In review"],["overdue","Overdue"],["done","Completed"]];
@@ -259,9 +257,26 @@ export default function App(){
   </>;
  }
  function showReports(){
-  const cards=[["Total assignments",workspace!.tasks.length],["Completed",workspace!.tasks.filter(t=>t.status==="done").length],["Waiting for client",workspace!.tasks.filter(t=>t.status==="waiting").length],["Missing documents",workspace!.documents.filter(d=>d.status==="missing").length]];
-  return <>{previewBanner()}<Heading title="Reports" subtitle="Firm operations, workload and bottlenecks" actions={<Button onClick={()=>download("tasks")}><ArrowDownToLine size={16}/> Export work</Button>}/><div className="cards" style={{gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))"}}>{cards.map(([name,value])=><div key={name} className="kpi"><div><label>{name}</label><div className="number">{value}</div></div></div>)}</div>
-   <Panel title="Work by staff">{workspace!.staff.map(m=><div className="stats-line" key={m.id}><div className="grow"><strong>{m.name}</strong></div><span className="small">{workspace!.tasks.filter(t=>t.assignee_id===m.id&&t.status!=="done").length} open · {workspace!.tasks.filter(t=>t.assignee_id===m.id&&t.status==="done").length} completed</span></div>)}</Panel>
+  const tasks=workspace!.tasks, documents=workspace!.documents;
+  const summary=[
+   ["Total Assignments",tasks.length],
+   ["Open",tasks.filter(t=>t.status!=="done").length],
+   ["Completed",tasks.filter(t=>t.status==="done").length],
+   ["Waiting for Client",tasks.filter(t=>t.status==="waiting").length],
+   ["Documents Missing",documents.filter(d=>d.status==="missing").length],
+   ["Under Review",tasks.filter(t=>t.status==="review").length]
+  ];
+  const columns:Column<Member>[]=[
+   {key:"name",title:"Staff Member",render:m=>m.name},
+   {key:"open",title:"Open Assignments",render:m=>tasks.filter(t=>t.assignee_id===m.id&&t.status!=="done").length},
+   {key:"complete",title:"Completed",render:m=>tasks.filter(t=>t.assignee_id===m.id&&t.status==="done").length},
+   {key:"review",title:"Pending Review",render:m=>tasks.filter(t=>t.assignee_id===m.id&&t.status==="review").length}
+  ];
+  return <>{previewBanner()}<Heading title="Work Reports" subtitle="Firm summary and staff-wise work distribution" actions={<Button onClick={()=>download("tasks")}><ArrowDownToLine size={16}/> Export Work</Button>}/>
+   <div className="erp-section-header">Assignment Summary</div>
+   <table className="erp-report-summary"><tbody>{summary.map(([name,count])=><tr key={name}><th scope="row">{name}</th><td>{count}</td></tr>)}</tbody></table>
+   <div className="erp-section-header">Staff-wise Work Distribution</div>
+   <Register columns={columns} rows={workspace!.staff} empty="No staff records"/>
   </>;
  }
  function showActivity(){return <>{previewBanner()}<Heading title="Activity & Sync" subtitle="Timestamped changes and operational status" actions={<Button onClick={()=>void refresh()}><RefreshCw size={15}/> Refresh</Button>}/><div className="split-grid">
@@ -274,62 +289,81 @@ export default function App(){
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  if(!session.authenticated||!workspace)return <Authentication needsSetup={session.needs_setup} onSubmit={handleAuth} error={error} busy={busy} onPreview={enterPreview}/>;
  const groups:{name:string;items:View[]}[]=[
-  {name:"WORKSPACE",items:["desk","work","clients","documents"]},
-  {name:"OPERATIONS",items:["compliance","team","reports"]},
-  {name:"SYSTEM",items:["activity","settings"]}
+  {name:"MASTERS",items:["clients","team"]},
+  {name:"TRANSACTIONS",items:["work","documents"]},
+  {name:"REPORTS",items:["compliance","reports","activity"]},
+  {name:"UTILITIES",items:["settings"]}
  ];
- const navCounts:Partial<Record<View,number>>={
-  work:workspace.tasks.filter(t=>t.status!=="done").length,
-  documents:workspace.documents.filter(d=>["missing","requested","rejected"].includes(d.status)).length,
-  activity:workspace.activity.length
- };
- const selectedPage=navItems.find(n=>n.id===view)?.label||"Desk";
- return <div className={"app-layout ca-experience" + (mobileNavOpen?" mobile-open":"")}>
-  <a className="skip-link" href="#main-content">Skip to main content</a>
-  {mobileNavOpen&&<button className="mobile-nav-backdrop" aria-label="Close navigation" onClick={()=>setMobileNavOpen(false)}/>}
-  <aside className="sidebar" aria-label="Primary navigation">
-    <div className="sidebar-brand"><span className="sidebar-logo"><BriefcaseBusiness size={21}/></span><span className="sidebar-brand-word"><strong>chamber</strong><small>PRACTICE OPERATIONS</small></span><button className="sidebar-mobile-close" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"><X size={18}/></button></div>
-    <div className="sidebar-context"><span className="context-monogram">{workspace.firm.name.slice(0,1).toUpperCase()}</span><span className="context-copy"><strong title={workspace.firm.name}>{workspace.firm.name}</strong><small>Firm workspace</small></span><ChevronRight size={15} className="sidebar-context-chevron"/></div>
-    <div className="sidebar-navigation">
-      {groups.map(group=><div className="side-nav-section" key={group.name}>
-        <div className="side-nav-heading">{group.name}</div>
-        {group.items.map(id=>{const item=navItems.find(n=>n.id===id)!;const Icon=item.icon;const count=navCounts[id]??0;
-          return <button key={id} className={"side-link "+(view===id?"active":"")} onClick={()=>navigate(id)} title={item.label} aria-current={view===id?"page":undefined}>
-            <Icon size={18} strokeWidth={1.85}/><span>{item.label}</span>
-            {count>0&&<span className="side-link-count">{count>99?"99+":count}</span>}
-          </button>;
-        })}
-      </div>)}
-    </div>
-    <div className="sidebar-spacer"/>
-    <div className="sidebar-support">
-      <button onClick={()=>setCommandOpen(true)}><Search size={16}/> Quick search <kbd>⌘K</kbd></button>
-      <div className="sidebar-bottom-account"><Avatar name={workspace.user.name}/><span><strong title={workspace.user.name}>{workspace.user.name}</strong><small>{workspace.user.role}</small></span><button aria-label="Open settings" title="Account settings" onClick={()=>navigate("settings")}><Settings size={16}/></button></div>
-    </div>
-  </aside>
-  <header className="topbar">
-    <button className="mobile-menu-button" onClick={()=>setMobileNavOpen(true)} aria-label="Open navigation"><Menu size={21}/></button>
-    <span className="mobile-top-brand">chamber</span>
-    <div className="breadcrumb"><span className="breadcrumb-root">WORKSPACE</span><ChevronRight size={15}/><strong>{selectedPage}</strong></div>
-    <button className="header-search" onClick={()=>setCommandOpen(true)} aria-label="Search across clients, tasks, and documents">
-      <Search size={17}/><span>Search clients, tasks, documents…</span><kbd>Ctrl K</kbd>
-    </button>
-    <div className="header-right">
-      {preview&&<span className="preview-indicator">SAMPLE</span>}
-      <span className="fy">FY {fyNow()}</span>
-      <button className="topbar-action" title="View recent activity" aria-label="View recent activity" onClick={()=>navigate("activity")}><ActivityIcon size={18}/></button>
-      <div className="top-user"><Avatar name={workspace.user.name}/><div><div className="name">{workspace.user.name}</div><small>{workspace.user.role}</small></div></div>
-    </div>
-  </header>
-  <main id="main-content" className="main-area" tabIndex={-1}><SectionMotion identity={view} key={view}>{page}</SectionMotion>
-    {error&&workspace&&<div className="alert" style={{marginTop:20}} role="alert">{error}</div>}
-  </main>
-  <footer className="statusbar"><span className="status-message"><span className="green-dot"/>{preview?"Read-only sample":"Firm workspace"}</span>
-    <span className="statusbar-divider">|</span> <span>F1–F4 navigate</span><span className="statusbar-divider">·</span><span>Alt+N new work</span><span className="statusbar-divider">·</span><span>Ctrl+K search</span>
-    <span className="push">CHAMBER <span className="statusbar-version">/ OPERATIONS</span></span>
-  </footer>
-  {modal&&<RecordForm kind={modal} workspace={workspace} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
-  {commandOpen&&<CommandPalette options={commands} onClose={()=>setCommandOpen(false)}/>}
-  {toast&&<div className="toast" role="status">{toast}</div>}
+ const shortcutActions:{key:string;label:string;onSelect:()=>void;disabled?:boolean}[]=[
+  {key:"F1",label:"Gateway / Desk",onSelect:()=>navigate("desk")},
+  {key:"F2",label:"Client Master",onSelect:()=>navigate("clients")},
+  {key:"F3",label:"Team Register",onSelect:()=>navigate("team")},
+  {key:"F4",label:"Activity & Sync",onSelect:()=>navigate("activity")},
+  {key:"F5",label:"Work Register",onSelect:()=>navigate("work")},
+  {key:"F6",label:"Document Register",onSelect:()=>navigate("documents")},
+  {key:"F7",label:"Compliance",onSelect:()=>navigate("compliance")},
+  {key:"Alt+N",label:"New Assignment",onSelect:()=>open("task"),disabled:preview||!privileged},
+  {key:"Alt+C",label:"New Client",onSelect:()=>open("client"),disabled:preview||!privileged},
+  {key:"Ctrl+K",label:"Go To / Search",onSelect:()=>setCommandOpen(true)}
+ ];
+ const currentPage=navItems.find(n=>n.id===view)?.label||"Desk";
+ return <div className={"app-layout erp-app"+(mobileNavOpen?" mobile-open":"")}>
+   <a href="#erp-main" className="erp-skip-link">Skip to contents</a>
+   <header className="topbar erp-toolbar">
+     <span className="erp-brand"><BriefcaseBusiness size={18}/> Chamber</span>
+     <span className="erp-edition">CA Practice Management</span>
+     <div className="erp-toolbar-buttons">
+       <button type="button" onClick={()=>setCommandOpen(true)}><span className="erp-toolbar-key">G</span> Go To</button>
+       <button type="button" onClick={()=>navigate("work")}><span className="erp-toolbar-key">W</span> Work</button>
+       <button type="button" onClick={()=>navigate("clients")}><span className="erp-toolbar-key">C</span> Clients</button>
+       <button type="button" onClick={()=>navigate("reports")}><span className="erp-toolbar-key">R</span> Reports</button>
+     </div>
+     <button className="erp-mobile-toggle" type="button" aria-label="Show navigation" onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={20}/></button>
+     <span className="erp-toolbar-user">{workspace.user.name} <span>({workspace.user.role})</span></span>
+   </header>
+   <div className="erp-companybar">
+     <div className="erp-company-title"><span>Company</span><strong>{workspace.firm.name}</strong></div>
+     <div className="erp-company-period"><span>Financial Year</span><strong>{fyNow()}</strong></div>
+     <div className="erp-company-screen"><span>Screen</span><strong>{currentPage}</strong></div>
+     {preview&&<span className="erp-sample-label">SAMPLE DATA · READ ONLY</span>}
+     <button className="erp-company-search" type="button" aria-label="Go to any record" onClick={()=>setCommandOpen(true)}><Search size={14}/> Go To / Search <kbd>Ctrl+K</kbd></button>
+   </div>
+   {mobileNavOpen&&<button className="erp-sidebar-backdrop" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"/>}
+   <aside className="sidebar erp-menu" aria-label="Chamber modules">
+     <div className="erp-menu-caption">GATEWAY OF CHAMBER</div>
+     <button className={"erp-menu-entry erp-menu-home"+(view==="desk"?" selected":"")} type="button" onClick={()=>navigate("desk")} aria-current={view==="desk"?"page":undefined}><Home size={15}/> Gateway / Desk</button>
+     {groups.map(g=><div className="erp-menu-group" key={g.name}>
+       <div className="erp-menu-group-title">{g.name}</div>
+       {g.items.map(id=>{const item=navItems.find(n=>n.id===id)!;return <button key={id} type="button" className={"erp-menu-entry"+(view===id?" selected":"")} onClick={()=>navigate(id)} aria-current={view===id?"page":undefined}>{item.label}</button>})}
+     </div>)}
+     <div className="erp-menu-spacer"/>
+     <div className="erp-menu-footer"><span>Current User</span><strong>{workspace.user.name}</strong><span>{workspace.user.role}</span></div>
+   </aside>
+   <main id="erp-main" className="main-area erp-content" tabIndex={-1}>
+     {page}
+     {error&&<div className="alert" role="alert">{error}</div>}
+   </main>
+   <aside className="erp-actionbar" aria-label="Function key actions">
+     <div className="erp-actionbar-heading">Function Keys</div>
+     {shortcutActions.map(a=><button key={a.key} type="button" disabled={a.disabled} onClick={a.onSelect}>
+       <kbd>{a.key}</kbd><span>{a.label}</span>
+     </button>)}
+     <div className="erp-actionbar-spacer"/>
+     <button type="button" onClick={()=>{setSelected(null);setModal(null);navigate("desk")}}><kbd>Esc</kbd><span>Gateway</span></button>
+   </aside>
+   <footer className="statusbar erp-statusbar">
+     <span>{preview?"Preview Mode":"Company Data"}</span>
+     <span className="erp-status-divider">│</span>
+     <span>Esc: Back</span>
+     <span className="erp-status-divider">│</span>
+     <span>Enter: Select</span>
+     <span className="erp-status-divider">│</span>
+     <span>Ctrl+K: Go To</span>
+     <span className="erp-status-spacer"/>
+     <span>Chamber · CA Firm Operations</span>
+   </footer>
+   {modal&&<RecordForm kind={modal} workspace={workspace} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
+   {commandOpen&&<CommandPalette options={commands} onClose={()=>setCommandOpen(false)}/>}
+   {toast&&<div className="toast" role="status">{toast}</div>}
  </div>;
 }

@@ -1,0 +1,330 @@
+/* Chamber Classic ERP — deliberate accounting-software visual conventions.
+   No metric tiles, animated dashboard cards, oversized canvases, or decorative gradients. */
+:root{
+  --erp-blue:#1e4f83;
+  --erp-blue-dark:#153c67;
+  --erp-blue-soft:#dfeaf5;
+  --erp-menu-bg:#edf2f7;
+  --erp-frame:#e7edf4;
+  --erp-report:#f9fbfd;
+  --erp-line:#bfcbd8;
+  --erp-line-soft:#dce4ec;
+  --erp-ink:#17283d;
+  --erp-muted:#61768c;
+}
+html,body,#root{height:100%;background:#edf2f6;color:var(--erp-ink);font-family:Arial,"Segoe UI",Tahoma,sans-serif;font-size:13px}
+button,input,select,textarea{font-family:inherit}
+button{transition:none!important}
+:focus-visible{outline:2px solid #277cc1!important;outline-offset:1px!important}
+.erp-skip-link{position:fixed;left:15px;top:-60px;background:#fff;border:2px solid var(--erp-blue);padding:10px;z-index:150}
+.erp-skip-link:focus{top:6px}
+.erp-app.app-layout{
+  display:grid;grid-template-columns:210px minmax(0,1fr) 177px;
+  grid-template-rows:42px 38px minmax(0,1fr) 28px;
+  height:100dvh;min-height:530px;overflow:hidden;
+  background:var(--erp-report);
+}
+/* Menu strip */
+.erp-app .topbar.erp-toolbar{
+  grid-column:1/-1;grid-row:1;min-width:0;height:42px;padding:0 12px;
+  display:flex;align-items:center;gap:0;background:var(--erp-blue);
+  color:white;border:0;border-bottom:1px solid #0e355e;
+}
+.erp-brand{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:750;color:#fff;letter-spacing:-.3px;min-width:195px}
+.erp-brand svg{color:#e6edf5}
+.erp-edition{font-size:11px;color:#bdcee0;white-space:nowrap;padding:0 17px 0 1px}
+.erp-toolbar-buttons{height:100%;display:flex;align-items:stretch;margin-left:auto}
+.erp-toolbar-buttons button{
+  border:0;border-left:1px solid #ffffff20;background:transparent;color:#edf4fb;
+  min-width:90px;display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:0 13px;font-size:11px;font-weight:600;letter-spacing:.03em
+}
+.erp-toolbar-buttons button:hover,.erp-toolbar-buttons button:focus-visible{background:#326494;color:#fff}
+.erp-toolbar-key{font-size:10px;text-decoration:underline;font-weight:750}
+.erp-toolbar-user{padding:0 6px 0 16px;border-left:1px solid #ffffff20;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.erp-toolbar-user span{color:#c4d8ea;font-weight:400;text-transform:capitalize}
+.erp-mobile-toggle{display:none;border:0;background:none;color:white;align-items:center;justify-content:center}
+.erp-companybar{
+  grid-column:1/-1;grid-row:2;height:38px;background:#e6eef7;
+  border-bottom:1px solid #bbcbdd;color:#263d59;display:flex;align-items:center;
+  gap:0;min-width:0;padding:0 11px;
+}
+.erp-company-title,.erp-company-period,.erp-company-screen{display:flex;align-items:center;gap:7px;font-size:11px;padding:0 17px;border-right:1px solid #c1d0df;min-height:20px;min-width:0}
+.erp-company-title{padding-left:1px;max-width:35%}
+.erp-company-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.erp-companybar span:not(.erp-sample-label){color:#62768d}
+.erp-companybar strong{font-size:11px;color:#203c5e}
+.erp-sample-label{font-size:10px;font-weight:700;color:#80551e;margin-left:14px;letter-spacing:.03em;white-space:nowrap}
+.erp-company-search{margin-left:auto;border:1px solid #b3c3d5;background:#f9fcff;display:flex;gap:8px;align-items:center;color:#42607f;height:26px;padding:0 10px;font-size:10.5px;white-space:nowrap}
+.erp-company-search:hover{background:#fff}
+.erp-company-search kbd{border-left:1px solid #ccd7e3;padding-left:7px;font-size:10px;font-family:inherit;color:#5a7190}
+/* Left gateway panel */
+.erp-app .sidebar.erp-menu{
+  grid-column:1;grid-row:3;min-width:0;min-height:0;display:flex;flex-direction:column;
+  gap:0;padding:0;overflow-y:auto;position:static;
+  border-right:1px solid #b8c8d8;background:var(--erp-menu-bg);
+  color:#263f5a;
+}
+.erp-menu-caption{background:#d4e1ee;border-bottom:1px solid #b7c6d8;color:#204d7e;font-size:11px;font-weight:750;text-align:center;padding:11px 8px;letter-spacing:.04em}
+.erp-menu-home{margin:12px 9px 7px}
+.erp-menu-group{margin:0 9px 11px}
+.erp-menu-group-title{font-size:10px;font-weight:750;color:#53718e;border-bottom:1px solid #cad7e3;padding:7px 9px 5px;letter-spacing:.025em}
+.erp-menu-entry{border:0;background:none;color:#284663;width:100%;display:flex;align-items:center;gap:8px;font-weight:570;text-align:left;font-size:11.5px;min-height:30px;padding:6px 10px;cursor:pointer}
+.erp-menu-entry:hover{background:#d7e6f4}
+.erp-menu-entry.selected{background:var(--erp-blue);color:#fff;font-weight:750}
+.erp-menu-spacer{flex:1}
+.erp-menu-footer{display:flex;flex-direction:column;gap:4px;padding:12px 15px;background:#e2eaf3;border-top:1px solid #c2d0df;color:#6d7f92;font-size:10px}
+.erp-menu-footer strong{color:#244363;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.erp-menu-footer span:last-child{text-transform:capitalize}
+/* Main working area */
+.erp-app .main-area.erp-content{
+  grid-column:2;grid-row:3;min-height:0;min-width:0;
+  padding:0;overflow:auto;background:var(--erp-report);scrollbar-gutter:stable;
+}
+.erp-content>.erp-gateway{min-width:0}
+.erp-content>.page-heading,.erp-content>.notice,.erp-content>.segmented,.erp-content>.toolbar,.erp-content>.panel,.erp-content>.split-grid,.erp-content>.register-tools,.erp-content>.register-with-detail,.erp-content>.erp-report-summary,.erp-content>.erp-section-header{
+  margin-left:14px;margin-right:14px
+}
+.erp-content>.page-heading{margin-top:14px}
+.erp-app .page-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.erp-app .page-heading h1{font-size:18px;font-weight:730;margin:0 0 3px;letter-spacing:0;color:#164b82}
+.erp-app .subtitle{color:#6a7a8d;font-size:11px}
+.erp-app .actions{gap:6px}
+.erp-app .btn{border-radius:2px;padding:6px 10px;min-height:29px;font-size:11px;box-shadow:none;color:#24496c;background:#f2f6fb;border:1px solid #b9c8d8;font-weight:650}
+.erp-app .btn:hover{background:#e1edf8;border-color:#7e9cbc}
+.erp-app .btn.primary{background:#1e548e;border:1px solid #154477;color:#fff}
+.erp-app .btn.primary:hover{background:#2f699f}
+.erp-app .btn.sm{min-height:25px;padding:4px 7px;font-size:10px}
+.erp-app .btn:disabled{opacity:.48}
+.erp-app .panel,.erp-app .detail-card{border-radius:0;border:1px solid var(--erp-line);box-shadow:none;background:#fff}
+.erp-app .panel-pad{padding:12px}
+.erp-app .panel-title{border-bottom:1px solid #d5e0eb;padding-bottom:9px;margin-bottom:10px}
+.erp-app .panel-title h2{color:#1b4c80;font-size:12px;font-weight:750}
+.erp-app .small{font-size:11px}
+.erp-app .tiny,.erp-app .hint{font-size:10px}
+.erp-app .notice{border-radius:0;background:#eff5fb;border:1px solid #cbd9e8;font-size:11px;padding:9px 12px;color:#37577a}
+.erp-app .empty{padding:32px 18px}
+.erp-app .empty strong{font-size:12px}
+.erp-app .empty p{font-size:11px}
+.erp-app .tag{border-radius:2px;font-size:10px;letter-spacing:0;border:1px solid #d8e3ed;padding:3px 6px;font-weight:600}
+.erp-app .tag.done,.erp-app .tag.verified{color:#22694a;background:#eff8f0;border-color:#c8e5d1}
+.erp-app .tag.blocked,.erp-app .tag.missing,.erp-app .tag.rejected{color:#9d3731;background:#fff3f2;border-color:#e8c6c3}
+.erp-app .tag.waiting,.erp-app .tag.requested{color:#846217;background:#fff8e4;border-color:#ead8a9}
+.erp-app .tag.in_progress{color:#21528c;background:#edf4fc;border-color:#cad9ee}
+.erp-app .segmented{display:flex;gap:2px;margin-bottom:8px;flex-wrap:wrap}
+.erp-app .chip{border-radius:1px;border:1px solid #bbcbdc;background:#f5f8fc;color:#385a7b;font-size:10.5px;padding:6px 9px}
+.erp-app .chip.active{background:#1e548e;color:#fff;border-color:#1e548e}
+.erp-app .chip b{background:#deebf6;color:#244e75;border-radius:2px}
+.erp-app .chip.active b{background:#4975a2;color:#fff}
+.erp-app .toolbar{margin:0 0 9px;gap:6px}
+.erp-app .search,.erp-app .control{height:29px;border-radius:1px;font-size:11px;padding:4px 9px;border:1px solid #b8c8d9}
+.erp-app .search{min-width:190px;max-width:390px}
+.erp-app .sort-control{min-width:145px}
+.erp-app .grid-table-wrap{max-width:100%;overflow:auto}
+.erp-app .data-table{min-width:630px;font-size:11px;border-spacing:0}
+.erp-app .data-table th{position:sticky;top:0;z-index:1;text-align:left;background:#e6eef7;border-bottom:1px solid #b8c9db;color:#214567;font-size:10px;letter-spacing:0;padding:8px 10px}
+.erp-app .data-table td{border-bottom:1px solid #e1e7ed;color:#233c54;padding:7px 10px}
+.erp-app .data-table tr:nth-child(even){background:#f8fafc}
+.erp-app .data-table tbody tr:hover{background:#e4effb}
+.erp-app .data-table tbody tr:focus-within{background:#d6e9fb}
+.erp-app .secondary-cell{color:#738397;font-size:10px;margin-top:3px}
+.erp-app .cell-link{color:#164c82;font-weight:700}
+.erp-app .table-footer{padding:8px 10px;border-top:1px solid #cbd7e3;font-size:10px;background:#f1f5f9}
+.erp-app .register-tools{margin-bottom:9px}
+.erp-app .register-with-detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(285px,330px);gap:8px;align-items:start}
+.erp-app .register-with-detail>.detail-card,.erp-app .register-with-detail>.record-inspector{position:sticky;top:6px;min-width:0}
+.erp-app .record-inspector>.detail-card{padding:13px}
+.erp-app .detail-head h2{font-size:14px;line-height:1.4}
+.erp-app .detail-tabs{margin:16px 0 12px}
+.erp-app .detail-kv{gap:8px}
+.erp-app .detail-kv div{padding-top:8px}
+.erp-app .detail-kv label{font-size:10px}
+.erp-app .detail-kv span{font-size:11px}
+/* Tally-style working register */
+.erp-report-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid #b5c8d9;background:#f2f6fa;min-height:72px;padding:13px 18px}
+.erp-report-overline{font-size:9px;letter-spacing:.06em;color:#6785a4;font-weight:700;margin-bottom:6px}
+.erp-report-heading h1{margin:0;color:#164c82;font-size:20px;letter-spacing:0;font-weight:750}
+.erp-heading-meta{display:flex;flex-direction:column;gap:5px;text-align:right;font-size:11px;color:#65809c;white-space:nowrap}
+.erp-heading-meta b{color:#1b426c}
+.erp-section-header{background:#d5e4f3;border-top:1px solid #b8cadb;border-bottom:1px solid #b8cadb;color:#1c4e80;min-height:29px;padding:6px 12px;font-size:11px;font-weight:760}
+.erp-section-header small{font-weight:400;color:#5b7794;font-size:10px}
+.erp-section-actions{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.erp-section-actions button{background:none;border:0;font-size:10.5px;font-weight:670;color:#1a5187;padding:2px}
+.erp-section-actions button:hover{text-decoration:underline}
+.erp-summary-line{display:flex;align-items:stretch;background:#fff;min-width:0;border-bottom:1px solid #cfdce9}
+.erp-summary-item{display:flex;flex:1;align-items:center;justify-content:space-between;gap:10px;min-height:49px;padding:10px 13px;background:transparent;border:0;border-right:1px solid #dbe4ee;color:#31506f;text-align:left}
+.erp-summary-item:last-child{border-right:0}
+.erp-summary-item:hover{background:#f0f6fc}
+.erp-summary-item.current{background:#edf4fb;box-shadow:inset 0 -2px 0 #245b96}
+.erp-summary-label{font-size:10px;line-height:1.4;color:#536c85;font-weight:620}
+.erp-summary-item strong{font-size:17px;font-weight:750;color:#203f62;font-variant-numeric:tabular-nums}
+.erp-overdue-count{color:#a7342c!important}
+.erp-register-controls{display:flex;align-items:center;justify-content:space-between;background:#f6f9fc;border-bottom:1px solid #c5d2e1;gap:10px;padding:7px 11px;min-width:0}
+.erp-register-filters{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
+.erp-register-filters button{background:none;border:1px solid transparent;padding:5px 8px;color:#315775;font-size:10.5px;white-space:nowrap}
+.erp-register-filters button:hover{background:#e9f1f9}
+.erp-register-filters button.selected{background:#1d568c;border-color:#1d568c;color:#fff;font-weight:700}
+.erp-filter-count{display:inline-block;min-width:14px;margin-left:4px;text-align:center;font-weight:700}
+.erp-find-field{display:flex;align-items:center;gap:7px;font-size:10px;color:#5d7187;flex:none}
+.erp-find-field input{height:26px;min-width:145px;width:190px;background:#fff;border:1px solid #b5c7d9;padding:3px 7px;color:#25415e;font-size:10px}
+.erp-register-scroll{max-height:370px;min-height:175px;overflow:auto;background:#fff}
+.erp-register-table,.erp-mini-register{border-collapse:collapse;width:100%;font-size:11px}
+.erp-register-table{min-width:840px}
+.erp-register-table th,.erp-mini-register th{position:sticky;top:0;background:#e6eef8;color:#285076;text-align:left;font-size:10px;font-weight:700;border-bottom:1px solid #b6c9da;padding:8px 9px;z-index:1;white-space:nowrap}
+.erp-register-table th:first-child,.erp-register-table td:first-child{border-left:0}
+.erp-register-table td,.erp-mini-register td{padding:7px 9px;border-bottom:1px solid #e0e8ef;color:#2d4560;vertical-align:middle}
+.erp-register-table tbody tr:nth-child(even),.erp-mini-register tbody tr:nth-child(even){background:#f8fafc}
+.erp-register-table tbody tr:hover,.erp-mini-register tbody tr:hover{background:#e8f2fc;cursor:pointer}
+.erp-register-table tbody tr.erp-current-row{background:#d1e6fb;outline:1px solid #91b4d6}
+.erp-register-table tbody tr.erp-row-overdue td:nth-last-child(2){color:#a43734;font-weight:680}
+.erp-row-link{border:0;background:none;text-align:left;color:#174e84;font-size:11px;font-weight:650;padding:0}
+.erp-row-link:hover{text-decoration:underline}
+.erp-particulars{display:block;font-weight:600;color:#264565}
+.erp-subparticulars{font-size:10px;color:#7b8b9a}
+.erp-col-num{width:41px;text-align:center!important;color:#75899f!important}
+.erp-nowrap{white-space:nowrap}
+.erp-status-text{font-size:10px;font-weight:650;color:#486881;white-space:nowrap}
+.erp-status-text.is-waiting,.erp-status-text.is-requested{color:#8c6220}
+.erp-status-text.is-blocked,.erp-status-text.is-missing{color:#9c3b36}
+.erp-status-text.is-review{color:#694c94}
+.erp-status-text.is-done,.erp-status-text.is-verified{color:#257049}
+.erp-status-text.is-in_progress{color:#285a90}
+.erp-no-entries{text-align:center;color:#718499!important;padding:24px 10px!important;font-size:11px}
+.erp-register-foot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #c8d6e3;border-bottom:1px solid #b4c7d8;background:#f2f6fb;color:#687f97;padding:6px 13px;font-size:10px}
+.erp-subregisters{display:grid;grid-template-columns:1fr 1fr;gap:0;background:#fff}
+.erp-subregister+.erp-subregister{border-left:1px solid #bacbdc}
+.erp-subregister .erp-section-header{border-top:0}
+.erp-mini-register{min-width:470px}
+.erp-subregister{min-width:0;overflow:auto}
+.erp-mini-register th{font-size:9.5px;padding:8px 9px}
+.erp-mini-register td{padding:7px 9px;font-size:10.5px}
+.erp-advisory{margin:0;background:#f1f5fa;color:#7b8b9c;font-size:9.5px;border-top:1px solid #d7e2ee;padding:9px 13px}
+/* Function-key commands: familiar, stable and intentionally not decorative */
+.erp-actionbar{grid-column:3;grid-row:3;border-left:1px solid #bac9d9;background:#ebf1f7;display:flex;flex-direction:column;min-height:0;overflow-y:auto}
+.erp-actionbar-heading{height:34px;flex:none;display:flex;align-items:center;justify-content:center;background:#d4e2f0;color:#205181;font-size:11px;font-weight:760;border-bottom:1px solid #bbcbdb}
+.erp-actionbar>button{display:flex;align-items:center;gap:8px;border:0;border-bottom:1px solid #d2deea;text-align:left;background:transparent;padding:7px 8px;min-height:37px;font-size:10.5px;color:#274f78}
+.erp-actionbar>button:hover{background:#d6e6f5}
+.erp-actionbar>button:disabled{opacity:.35;cursor:default}
+.erp-actionbar>button kbd{width:45px;flex:none;text-align:center;color:#23558a;background:#fff;border:1px solid #b5c8db;padding:4px 2px;font-size:9.5px;font-weight:750;font-family:inherit}
+.erp-actionbar>button span{line-height:1.3}
+.erp-actionbar-spacer{flex:1}
+.erp-statusbar{grid-column:1/-1!important;grid-row:4!important;background:#1e4f83!important;color:#e4eff8!important;display:flex!important;gap:10px!important;padding:0 13px!important;font-size:10px!important;border:0!important;align-items:center!important}
+.erp-statusbar span{color:inherit}
+.erp-status-divider{color:#b7cfe5!important}
+.erp-status-spacer{flex:1}
+.erp-sidebar-backdrop{display:none}
+/* Plain, ledger-like reports */
+.erp-report-summary{width:100%;background:#fff;border-collapse:collapse;margin-bottom:18px;max-width:720px}
+.erp-report-summary th,.erp-report-summary td{padding:9px 12px;border-bottom:1px solid #dce5ee;text-align:left;font-size:11px}
+.erp-report-summary th{font-weight:500;color:#355a7d}
+.erp-report-summary td{font-weight:750;text-align:right;color:#224566;font-variant-numeric:tabular-nums}
+.erp-report-summary tr:nth-child(even){background:#f5f8fb}
+/* Existing forms remain readable and predictable */
+.erp-app .overlay{backdrop-filter:none;background:#142e4a80}
+.erp-app .dialog{border-radius:2px;border:1px solid #7f9dbb;box-shadow:0 12px 36px #10284640}
+.erp-app .dialog-header{background:#d8e8f8;padding:12px 16px;border-bottom:1px solid #b1c5d9}
+.erp-app .dialog-header h2{font-size:13px;color:#174c83}
+.erp-app .dialog-body{padding:16px}
+.erp-app .field label{font-size:11px}
+.erp-app .field input,.erp-app .field select,.erp-app .field textarea{border-radius:1px;min-height:30px;font-size:11.5px;padding:6px 8px}
+.erp-app .field textarea{min-height:80px}
+.erp-app .form-actions{margin-top:14px}
+.erp-app .auth-card{border-radius:2px;box-shadow:0 8px 20px #1d355214}
+.erp-app .auth-card h1{font-size:22px}
+.erp-app .form-screen{background:#e8eff6}
+.erp-app .toast{border-radius:3px;background:#1f4d7d}
+/* Command search uses a conventional ERP Go To window, not an AI command center */
+.command-overlay{position:fixed;z-index:130;inset:0;background:#17335080;display:flex;align-items:flex-start;justify-content:center;padding:12vh 12px 16px}
+.command-dialog{background:#fff;border:2px solid #7197bf;border-radius:2px;width:min(570px,100%);box-shadow:0 15px 40px #10283f50;overflow:hidden}
+.command-input-wrap{display:flex;align-items:center;gap:9px;background:#e0ecf8;padding:10px 13px;border-bottom:1px solid #b8ccdf;color:#2a557f}
+.command-input-wrap input{flex:1;min-width:0;border:1px solid #b6cbde;background:#fff;font-size:12px;padding:8px;outline:none;color:#27496e}
+.command-input-wrap button{border:0;background:none;color:#426b90}
+.command-scroll{max-height:360px;overflow-y:auto;padding:4px}
+.command-group-title{padding:9px 10px 6px;color:#567796;background:#f0f5fa;font-size:10px;letter-spacing:.03em;font-weight:740}
+.command-option{width:100%;border:0;background:#fff;display:flex;align-items:center;gap:8px;padding:8px 11px;text-align:left;min-height:38px}
+.command-option.selected,.command-option:hover{background:#d9eaf9}
+.command-row-icon{color:#4777a0;width:22px;display:grid;place-items:center}
+.command-row-text{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.command-row-text strong{font-size:11px;color:#254a72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.command-row-text small{font-size:10px;color:#7a8d9f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.command-enter{color:#6789a9}
+.command-empty{padding:30px;text-align:center;display:flex;align-items:center;flex-direction:column;gap:6px;color:#657d95}
+.command-empty strong{font-size:12px}.command-empty span{font-size:10px}
+.command-footer{background:#ebf2f9;display:flex;gap:13px;padding:8px 11px;font-size:10px;color:#66809a;border-top:1px solid #cbd9e6}
+.command-footer span{display:flex;align-items:center;gap:4px}
+.command-footer kbd{border:1px solid #b1c3d6;background:#fff;padding:2px 4px;font-family:inherit}
+.command-footer .command-watermark{margin-left:auto;letter-spacing:.08em;font-weight:800;color:#4c739a}
+/* Responsive is a practical fallback; full ledger UX remains desktop-first. */
+@media(max-width:1260px){
+ .erp-app.app-layout{grid-template-columns:190px minmax(0,1fr) 148px}
+ .erp-brand{min-width:160px}
+ .erp-edition{display:none}
+ .erp-actionbar>button{gap:4px;font-size:10px;padding:6px 4px}
+ .erp-actionbar>button kbd{width:37px}
+ .erp-summary-item{padding:8px;gap:5px}
+ .erp-summary-label{font-size:9.5px}
+}
+@media(max-width:1000px){
+ .erp-app.app-layout{grid-template-columns:182px minmax(0,1fr)}
+ .erp-actionbar{display:none}
+ .erp-company-screen{display:none}
+ .erp-subregisters{grid-template-columns:1fr}
+ .erp-subregister+.erp-subregister{border-left:0;border-top:1px solid var(--erp-line)}
+}
+@media(max-width:760px){
+ .erp-app.app-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:42px 35px minmax(0,1fr) 27px}
+ .erp-toolbar{padding:0 9px!important}
+ .erp-brand{min-width:0;font-size:14px}
+ .erp-toolbar-buttons{margin-left:auto}
+ .erp-toolbar-buttons button{min-width:0;padding:0 8px;font-size:10px}
+ .erp-toolbar-user{display:none}
+ .erp-mobile-toggle{display:flex}
+ .erp-app .sidebar.erp-menu{position:fixed;z-index:90;left:0;top:42px;bottom:27px;width:230px;transform:translateX(-105%);box-shadow:3px 0 8px #16375a30}
+ .erp-app.mobile-open .sidebar.erp-menu{transform:translateX(0)}
+ .erp-app.mobile-open .erp-sidebar-backdrop{position:fixed;z-index:85;display:block;inset:42px 0 27px;border:0;background:#132d4677}
+ .erp-app .main-area.erp-content{grid-column:1;grid-row:3}
+ .erp-company-title{max-width:48%}
+ .erp-company-period{padding:0 9px}
+ .erp-company-search{padding:0 6px}
+ .erp-company-search kbd{display:none}
+ .erp-companybar{padding:0 7px}
+ .erp-statusbar{font-size:9px!important;gap:6px!important;padding:0 7px!important}
+ .erp-register-controls{flex-wrap:wrap}
+ .erp-register-filters{overflow-x:auto;flex-wrap:nowrap;width:100%}
+ .erp-summary-line{flex-wrap:wrap}
+ .erp-summary-item{min-width:30%;flex:1 1 30%;min-height:43px}
+ .erp-report-heading{min-height:68px;padding:11px 12px}
+ .erp-report-heading h1{font-size:17px}
+ .erp-heading-meta{font-size:10px}
+ .erp-register-scroll{max-height:350px}
+ .erp-app .register-with-detail{grid-template-columns:1fr}
+ .erp-app .register-with-detail>.detail-card,.erp-app .register-with-detail>.record-inspector{position:static}
+ .erp-app .actions{flex-wrap:wrap}
+}
+@media(max-width:520px){
+ .erp-brand svg{display:none}
+ .erp-toolbar-buttons button{padding:0 6px;font-size:9.5px}
+ .erp-toolbar-buttons button:nth-child(4){display:none}
+ .erp-company-search{font-size:0;gap:0}
+ .erp-company-search svg{width:16px}
+ .erp-company-period{display:none}
+ .erp-company-title{max-width:68%}
+ .erp-sample-label{font-size:8px;margin-left:7px}
+ .erp-heading-meta{align-items:flex-end}
+ .erp-summary-item{min-width:46%;flex:1 1 46%}
+ .erp-app .page-heading{align-items:flex-start;flex-direction:column}
+ .erp-app .page-heading h1{font-size:17px}
+ .erp-app .toolbar{flex-wrap:wrap}
+ .erp-app .search{max-width:100%}
+ .erp-content>.page-heading,.erp-content>.notice,.erp-content>.segmented,.erp-content>.toolbar,.erp-content>.panel,.erp-content>.split-grid,.erp-content>.register-tools,.erp-content>.register-with-detail,.erp-content>.erp-report-summary,.erp-content>.erp-section-header{margin-left:8px;margin-right:8px}
+ .erp-subregister{max-width:100vw;overflow:auto}
+ .erp-statusbar span:nth-of-type(4),.erp-statusbar span:nth-of-type(5),.erp-statusbar span:nth-of-type(6){display:none}
+}
+@media print{
+ .erp-app.app-layout{display:block;height:auto;overflow:visible}
+ .erp-toolbar,.erp-companybar,.erp-menu,.erp-actionbar,.erp-statusbar,.erp-register-controls{display:none!important}
+ .erp-app .main-area.erp-content{overflow:visible;padding:0}
+ .erp-register-scroll{max-height:none;overflow:visible}
+ .erp-register-table th,.erp-mini-register th{position:static}
+ .erp-report-heading{border:0}
+}
