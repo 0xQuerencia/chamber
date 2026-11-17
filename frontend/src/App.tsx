@@ -136,7 +136,7 @@ export default function App(){
   if(query&&!text.includes(query.toLowerCase()))return false;
   if(workFilter==="mine"&&t.assignee_id!==workspace.user.id)return false;
   if(workFilter==="overdue")return Boolean(t.due_date&&t.due_date<today&&t.status!=="done");
-  return workFilter==="all"||workFilter==="mine"||workFilter==="overdue"||t.status===workFilter;
+  return workFilter==="all"||workFilter==="mine"||t.status===workFilter;
  }),[workspace,query,workFilter,clientName,memberName,today]);
  const taskCols:Column<Task>[]=[
   {key:"client",title:"Client / Work",render:t=><><button className="cell-link" onClick={()=>{setView("work");setSelected(t.id)}}>{clientName(t.client_id)}</button><div className="secondary-cell">{t.title}</div></>},
