@@ -1,7 +1,7 @@
 {
   "name": "chamber",
   "main": "src/worker.js",
-  "compatibility_date": "2026-11-18",
+  "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -10,7 +10,7 @@
   "d1_databases": [{
     "binding": "DB",
     "database_name": "chamber-db",
-    "database_id": "00000000-0000-0000-0000-000000000000",
+    "database_id": "ecb99289-8a95-4f8b-a660-f295da9baca5",
     "migrations_dir": "migrations"
   }]
 }

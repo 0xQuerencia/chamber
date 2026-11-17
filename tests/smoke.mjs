@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+
+const base = "http://127.0.0.1:8787";
+let principalCookie = "";
+async function call(path, method = "GET", data, cookie = principalCookie, extra = {}) {
+  const headers = { ...extra };
+  if (method !== "GET") headers.Origin = base;
+  if (cookie) headers.Cookie = cookie;
+  if (data !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(base + path, { method, headers, body: data === undefined ? undefined : JSON.stringify(data) });
+  const type = res.headers.get("content-type") || "";
+  const body = type.includes("application/json") ? await res.json() : await res.text();
+  return { res, body };
+}
+const ok = value => { assert.ok(value.res.ok, JSON.stringify(value.body)); return value.body; };
+const session = await call("/api/session");
+assert.equal(ok(session).needs_setup, true);
+const setup = await call("/api/setup", "POST", { firm:"Test CA & Co.", name:"Test Principal", email:"principal@example.test", password:"strong-password-123" }, "", { "X-Setup-Token":"test-setup-token-123456789" });
+assert.equal(setup.res.status, 201);
+const retry = await call("/api/setup", "POST", { firm:"Second Firm", name:"Fake", email:"other@example.test", password:"strong-password-123" }, "", { "X-Setup-Token":"test-setup-token-123456789" });
+assert.equal(retry.res.status, 409);
+const login = await call("/api/login", "POST", { email:"principal@example.test", password:"strong-password-123" }, "");
+ok(login);
+principalCookie = login.res.headers.get("set-cookie").split(";")[0];
+assert.ok(principalCookie.startsWith("chamber_session="));
+assert.equal(ok(await call("/api/bootstrap")).clients.length, 0);
+
+const clientA = ok(await call("/api/clients","POST",{name:"Shah & Co.",category:"Partnership",email:"accounts@example.test"}));
+const clientB = ok(await call("/api/clients","POST",{name:"Hidden Client",category:"Business"}));
+const staff = ok(await call("/api/staff","POST",{name:"Aarav Kumar",email:"aarav@example.test",password:"strong-staff-password",role:"staff"}));
+const task = ok(await call("/api/tasks","POST",{client_id:clientA.id,title:"GST Return",service:"GST",period:"Oct 2026",due_date:"2026-11-20",assignee_id:staff.id,priority:"high"}));
+const document = ok(await call("/api/documents","POST",{task_id:task.id,name:"Sales invoices"}));
+let snap = ok(await call("/api/bootstrap"));
+assert.equal(snap.clients.length, 2);
+assert.equal(snap.tasks.length, 1);
+assert.equal(snap.documents.length, 1);
+assert.equal(snap.tasks[0].status, "todo");
+
+const staffLogin = await call("/api/login","POST",{email:"aarav@example.test",password:"strong-staff-password"},"");
+ok(staffLogin);
+const staffCookie = staffLogin.res.headers.get("set-cookie").split(";")[0];
+snap = ok(await call("/api/bootstrap","GET",undefined,staffCookie));
+assert.equal(snap.clients.length, 1, "Staff must only see clients with their assigned tasks");
+assert.equal(snap.clients[0].id, clientA.id);
+const createdByStaff = await call("/api/clients","POST",{name:"Unauthorised"} ,staffCookie);
+assert.equal(createdByStaff.res.status,403);
+ok(await call("/api/tasks/"+task.id,"PATCH",{status:"in_progress"},staffCookie));
+const doneByStaff = await call("/api/tasks/"+task.id,"PATCH",{status:"done"},staffCookie);
+assert.notEqual(doneByStaff.res.status,200);
+const verifyByStaff = await call("/api/documents/"+document.id,"PATCH",{status:"verified"},staffCookie);
+assert.equal(verifyByStaff.res.status,403);
+
+ok(await call("/api/documents/"+document.id,"PATCH",{status:"received"}));
+ok(await call("/api/documents/"+document.id,"PATCH",{status:"verified"}));
+ok(await call("/api/tasks/"+task.id,"PATCH",{status:"done"}));
+snap = ok(await call("/api/bootstrap"));
+assert.equal(snap.tasks[0].status,"done");
+assert.equal(snap.documents[0].status,"verified");
+assert.ok(snap.activity.length >= 7);
+const csv = await call("/api/export?kind=clients");
+assert.equal(csv.res.status,200);
+assert.ok(csv.body.includes("Shah & Co."));
+
+const health = await fetch(base + "/api/health");
+assert.equal(health.status,200);
+const page = await fetch(base + "/");
+assert.equal(page.status,200);
+assert.ok((await page.text()).includes("app.js"));
+const asset = await fetch(base + "/app.js");
+assert.equal(asset.status,200);
+assert.ok((await asset.text()).includes("renderDesk"));
+const logout = await call("/api/logout","POST",{});
+ok(logout);
+const unauthorized = await call("/api/bootstrap");
+assert.equal(unauthorized.res.status,401);
+console.log("Chamber end-to-end smoke test passed: auth, roles, tasks, documents, audit, exports and assets.");

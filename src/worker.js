@@ -82,6 +82,7 @@ async function handleLogin(request, env) {
   const email = clean(data.email, 200).toLowerCase(), password = String(data.password || "");
   const guard = await env.DB.prepare("SELECT failures,lock_until FROM login_attempts WHERE email=?").bind(email).first();
   if (guard && guard.lock_until && guard.lock_until > iso()) return fail("Too many attempts. Try again later.", 429);
+  if (!validEmail(email) || password.length > 128) return fail("Invalid email or password",401);
   const user = await env.DB.prepare("SELECT * FROM users WHERE email=? AND active=1").bind(email).first();
   const match = user && equalConstant(await derivePassword(password, user.salt), user.password_hash);
   if (!match) {
@@ -158,7 +159,7 @@ async function handleCreateTask(data, env, user) {
 async function handleUpdateTask(taskId, data, env, user) {
   const previous=await env.DB.prepare("SELECT * FROM tasks WHERE firm_id=? AND id=?").bind(user.firm_id,taskId).first();
   if (!previous) return fail("Task not found",404);
-  if (!isPrivileged(user) && previous.assignee_id!==user.id) return fail("Insufficient permission",403);
+  if (!isPrivileged(user) && (previous.assignee_id!==user.id || previous.status==="done")) return fail("Insufficient permission",403);
   const status=data.status===undefined?previous.status:safeStatus(data.status);
   if (!status || !statusForRole(user.role,status)) return fail("Status not permitted");
   const assignee=isPrivileged(user) && data.assignee_id!==undefined?clean(data.assignee_id,80):previous.assignee_id;
@@ -193,7 +194,7 @@ async function handleUpdateDocument(docId,data,env,user) {
   const previous=await env.DB.prepare("SELECT * FROM documents WHERE firm_id=? AND id=?").bind(user.firm_id,docId).first();
   if (!previous) return fail("Document not found",404);
   const task=await loadTaskForDocument(env.DB,user,previous.task_id);
-  if (!task) return fail("Insufficient permission",403);
+  if (!task || (!isPrivileged(user) && previous.status==="verified")) return fail("Insufficient permission",403);
   const allowed=["missing","requested","received","verified","rejected","not_applicable"];
   const status=String(data.status||"");
   if (!allowed.includes(status)) return fail("Invalid document status");
@@ -281,7 +282,7 @@ export default {
     headers.set("X-Content-Type-Options","nosniff");
     headers.set("Referrer-Policy","strict-origin-when-cross-origin");
     headers.set("X-Frame-Options","DENY");
-    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };
