@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity as ActivityIcon, ArrowDownToLine, Bell, BriefcaseBusiness, CalendarDays, ChartColumn, CheckCircle2, ClipboardList, FileText, FolderOpen, Home, LogOut, Plus, RefreshCw, Search, Settings, ShieldAlert, Users, X } from "lucide-react";
-import { api, createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
+import { Activity as ActivityIcon, ArrowDownToLine, Bell, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Plus, RefreshCw, Search, Settings, ShieldAlert, Users, X } from "lucide-react";
+import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
 import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, SectionMotion, StatusBadge, type Column } from "./components";
-import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, Template, View, WorkFilter, Workspace } from "./types";
+import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
 
 const navItems:{id:View;label:string;icon:typeof Home}[]=[
  {id:"desk",label:"Desk",icon:Home},{id:"work",label:"Work Register",icon:ClipboardList},{id:"clients",label:"Clients",icon:Users},
@@ -258,7 +258,7 @@ export default function App(){
   <aside className="sidebar" aria-label="Main navigation">{navItems.map(({id,label,icon:Icon})=><button key={id} className={"side-link "+(view===id?"active":"")} onClick={()=>navigate(id)} aria-current={view===id?"page":undefined}><Icon size={19}/><span>{label}</span></button>)}<div className="sidebar-spacer"/><div className="firm-foot"><BriefcaseBusiness size={20}/><div><strong>{workspace.firm.name}</strong><br/><small>Firm workspace</small></div></div></aside>
   <main className="main-area"><SectionMotion identity={view} key={view}>{page}</SectionMotion>{error&&workspace&&<div className="alert" style={{marginTop:20}} role="alert">{error}</div>}</main>
   <footer className="statusbar"><ShieldAlert size={14}/> F1–F4: Navigate <span>·</span> Alt+N: New work <span>·</span> Ctrl+K: Search <span className="push"><span className="green-dot"/>{preview?"Sample mode · read only":"Connected"}</span></footer>
-  {modal&&<RecordForm kind={modal} workspace={workspace} onClose={()=>setModal(null)} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
+  {modal&&<RecordForm kind={modal} workspace={workspace} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
   {toast&&<div className="toast" role="status">{toast}</div>}
  </div>;
 }
