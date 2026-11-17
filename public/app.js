@@ -28,7 +28,7 @@ const paths = {
   copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
   menu:'<path d="M3 6h18M3 12h18M3 18h18"/>'
 };
-const S = {loading:true,session:null,data:null,view:"desk",filter:"all",q:"",selected:null,modal:null,error:"",toast:""};
+const S = {loading:true,session:null,data:null,view:"desk",filter:"all",q:"",selected:null,modal:null,error:"",toast:"",preview:false};
 function icon(name,cls=""){return '<svg class="'+esc(cls)+'" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(paths[name]||paths.file)+'</svg>';}
 function esc(v){return String(v===null||v===undefined?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function text(v){return esc(v||"—");}
@@ -184,9 +184,48 @@ function renderActivity(){
 }
 function renderSettings(){
  return heading("Settings","Firm and account configuration")+
- panel("Current firm",'<div class="detail-kv"><div><label>Firm</label><span>'+esc(S.data.firm?.name||"—")+'</span></div><div><label>Signed in as</label><span>'+esc(S.data.user.name)+'</span></div><div><label>Role</label><span>'+esc(S.data.user.role)+'</span></div><div><label>Email</label><span>'+esc(S.data.user.email)+'</span></div></div><div style="margin-top:20px">'+btn(icon("logout")+" Sign out","logout")+'</div>')+
+ panel("Current firm",'<div class="detail-kv"><div><label>Firm</label><span>'+esc(S.data.firm?.name||"—")+'</span></div><div><label>Signed in as</label><span>'+esc(S.data.user.name)+'</span></div><div><label>Role</label><span>'+esc(S.data.user.role)+'</span></div><div><label>Email</label><span>'+esc(S.data.user.email)+'</span></div></div><div style="margin-top:20px">'+btn(icon("logout")+(S.preview?" Exit preview":" Sign out"),S.preview?"exit-preview":"logout")+'</div>')+
  '<div style="margin-top:15px">'+panel("Planned integrations",'<p class="small muted">Email, official WhatsApp Business, recurring tax deadline rules, Google Sheets and file uploads will be enabled only after their backend integrations and permission checks are ready.</p>')+'</div>';
 }
+function sampleData(){
+ const staff=[
+  {id:"demo-admin",name:"Demo Principal",email:"principal@example.invalid",role:"principal",active:1},
+  {id:"demo-1",name:"Aarav Kumar",email:"",role:"staff",active:1},
+  {id:"demo-2",name:"Priya Desai",email:"",role:"staff",active:1},
+  {id:"demo-3",name:"Rohan Mehta",email:"",role:"manager",active:1}
+ ];
+ const clients=[
+  {id:"client-1",name:"Shah & Co.",category:"Partnership",email:"",phone:"",pan:"",gstin:"",created_at:"2026-10-10"},
+  {id:"client-2",name:"Mehta Traders",category:"Business",email:"",phone:"",pan:"",gstin:"",created_at:"2026-10-13"},
+  {id:"client-3",name:"ABC Enterprises",category:"Company",email:"",phone:"",pan:"",gstin:"",created_at:"2026-10-15"},
+  {id:"client-4",name:"Patel Industries",category:"Business",email:"",phone:"",pan:"",gstin:"",created_at:"2026-10-17"}
+ ];
+ const tasks=[
+  {id:"demo-task-1",client_id:"client-1",title:"GST Return",service:"GST",period:"Oct 2026",assignee_id:"demo-1",reviewer_id:"demo-3",status:"in_progress",priority:"high",due_date:"2026-11-20",notes:""},
+  {id:"demo-task-2",client_id:"client-2",title:"TDS Filing",service:"TDS",period:"Q2 2026",assignee_id:"demo-2",reviewer_id:"demo-3",status:"waiting",priority:"medium",due_date:"2026-11-21",notes:""},
+  {id:"demo-task-3",client_id:"client-3",title:"Statutory Audit",service:"Audit",period:"FY 2025–26",assignee_id:"demo-3",reviewer_id:"demo-admin",status:"review",priority:"medium",due_date:"2026-11-26",notes:""},
+  {id:"demo-task-4",client_id:"client-4",title:"GST Reconciliation",service:"GST",period:"Oct 2026",assignee_id:"demo-1",reviewer_id:"demo-3",status:"done",priority:"low",due_date:"2026-11-12",notes:""},
+  {id:"demo-task-5",client_id:"client-1",title:"Books finalization",service:"Accounts",period:"Oct 2026",assignee_id:"demo-2",reviewer_id:"demo-3",status:"todo",priority:"medium",due_date:"2026-11-27",notes:""}
+ ];
+ const documents=[
+  {id:"demo-doc-1",task_id:"demo-task-1",client_id:"client-1",name:"Sales invoices",status:"received",requested_at:"2026-11-12",updated_at:"2026-11-14"},
+  {id:"demo-doc-2",task_id:"demo-task-2",client_id:"client-2",name:"Bank statements",status:"missing",requested_at:null,updated_at:"2026-11-17"},
+  {id:"demo-doc-3",task_id:"demo-task-3",client_id:"client-3",name:"Fixed asset register",status:"requested",requested_at:"2026-11-11",updated_at:"2026-11-16"},
+  {id:"demo-doc-4",task_id:"demo-task-4",client_id:"client-4",name:"Purchase invoices",status:"verified",requested_at:"2026-11-05",updated_at:"2026-11-10"}
+ ];
+ const activity=[
+  {id:"evt-1",actor_name:"Aarav Kumar",event:"updated",entity_type:"task",entity_id:"demo-task-1",at:"2026-11-17T10:24:00Z"},
+  {id:"evt-2",actor_name:"Priya Desai",event:"created",entity_type:"document",entity_id:"demo-doc-2",at:"2026-11-16T08:00:00Z"},
+  {id:"evt-3",actor_name:"Rohan Mehta",event:"updated",entity_type:"task",entity_id:"demo-task-3",at:"2026-11-15T08:00:00Z"}
+ ];
+ const templates=[
+  {id:"demo-tpl-1",name:"Monthly GST return",service:"GST",frequency:"monthly",due_day:15,active:1},
+  {id:"demo-tpl-2",name:"Quarterly TDS",service:"TDS",frequency:"quarterly",due_day:20,active:1}
+ ];
+ const enrollments=[{id:"demo-enroll-1",template_id:"demo-tpl-1",client_id:"client-1",active:1},{id:"demo-enroll-2",template_id:"demo-tpl-2",client_id:"client-2",active:1}];
+ return {firm:{id:"demo-firm",name:"Demo & Co. (Sample)"},user:staff[0],staff,clients,tasks,documents,activity,templates,enrollments};
+}
+
 function renderAuth(){
  const setup=S.session?.needs_setup;
  const title=setup?"Create your firm":"Sign in to Chamber";
@@ -253,11 +292,11 @@ function shell(content){
  const nav=views.map(v=>'<button class="side-link '+(S.view===v[0]?"active":"")+'" data-view="'+v[0]+'" title="'+v[1]+'">'+icon(v[2])+'<span>'+v[1]+'</span></button>').join("");
  return '<div class="app-layout"><header class="topbar">'+
  '<div class="brand"><span class="brand-mark">'+icon("briefcase")+'</span>CHAMBER</div>'+
- '<div class="breadcrumb">/ <strong>'+esc(current[1])+'</strong></div><span class="fy">FY '+esc(new Date().getMonth()>=3?new Date().getFullYear()+"–"+String(new Date().getFullYear()+1).slice(-2):(new Date().getFullYear()-1)+"–"+String(new Date().getFullYear()).slice(-2))+'</span>'+
+ '<div class="breadcrumb">/ <strong>'+esc(current[1])+'</strong></div>'+(S.preview?'<span class="tag review">SAMPLE PREVIEW</span>':'')+'<span class="fy">FY '+esc(new Date().getMonth()>=3?new Date().getFullYear()+"–"+String(new Date().getFullYear()+1).slice(-2):(new Date().getFullYear()-1)+"–"+String(new Date().getFullYear()).slice(-2))+'</span>'+
  '<button class="header-search" data-action="global-search">'+icon("search")+' Search clients, work, documents… <kbd>Ctrl K</kbd></button>'+
  '<div class="top-user">'+memberAvatar(S.data.user.name)+'<div><div class="name">'+esc(S.data.user.name)+'</div><small>'+esc(S.data.user.role)+'</small></div></div></header>'+
  '<aside class="sidebar" aria-label="Main navigation">'+nav+'<div class="sidebar-spacer"></div><div class="firm-foot">'+icon("briefcase")+'<div><strong>'+esc(S.data.firm?.name||"Firm")+'</strong><br><small>Firm workspace</small></div></div></aside>'+
- '<main class="main-area" id="main-area">'+content+'</main><footer class="statusbar">'+icon("list")+' F1–F4: Navigate <span>·</span> Alt+N: New work <span>·</span> Ctrl+K: Search <span class="push"><span class="green-dot"></span>Connected</span></footer></div>'+
+ '<main class="main-area" id="main-area">'+content+'</main><footer class="statusbar">'+icon("list")+' F1–F4: Navigate <span>·</span> Alt+N: New work <span>·</span> Ctrl+K: Search <span class="push"><span class="green-dot"></span>'+(S.preview?'Sample data · read only':'Connected')+'</span></footer></div>'+
  modal()+(S.toast?'<div class="toast" role="status">'+esc(S.toast)+'</div>':"");
 }
 function render(){
@@ -267,6 +306,7 @@ function render(){
  root.innerHTML=shell((pages[S.view]||renderDesk)());
 }
 async function api(path,method="GET",data,headers={}){
+ if(S.preview)throw Error("Read-only preview: no records have been changed.");
  const opts={method,credentials:"same-origin",headers:{...headers}};
  if(data!==undefined){opts.headers["Content-Type"]="application/json";opts.body=JSON.stringify(data);}
  const response=await fetch(path,opts);
@@ -279,6 +319,7 @@ async function load(){
  S.loading=false;S.error="";render();
 }
 async function init(){
+ if(new URL(location.href).searchParams.get("preview")==="1"){S.preview=true;S.data=sampleData();S.session={authenticated:true};S.loadedAt="Sample data";S.loading=false;render();return;}
  try{
   S.session=await api("/api/session");
   if(S.session.authenticated)await load();
@@ -288,6 +329,7 @@ async function init(){
 function flash(message){S.toast=message;render();setTimeout(()=>{S.toast="";render();},2800);}
 function navTo(view){S.view=view;S.selected=null;S.filter="all";S.q="";S.error="";render();}
 function openModal(kind){
+ if(S.preview)return flash("Read-only sample preview. Open the main site to set up a firm.");
  if(!S.data)return;S.error="";
  if((["client","task","template","enrollment"].includes(kind))&&!permitted())return flash("Only managers can create this record.");
  if(kind==="staff"&&S.data.user.role!=="principal")return flash("Only principals can add staff.");
@@ -349,8 +391,10 @@ root.addEventListener("click",async event=>{
  if(action==="refresh"){try{await load();flash("Records refreshed.");}catch(e){flash(e.message);}return;}
  if(action==="generate-period"){try{const period=root.querySelector("#period-picker")?.value;if(!period)return flash("Choose a period first.");const outcome=await api("/api/recurrence","POST",{period});await load();flash(outcome.created+" assignments created; "+outcome.already+" already existed.");}catch(e){flash(e.message);}return;}
  if(action==="global-search"){navTo("work");root.querySelector("#main-search")?.focus();return;}
+ if(action==="exit-preview"){window.location.href="/";return;}
  if(action==="logout"){try{await api("/api/logout","POST",{});S.session={authenticated:false,needs_setup:false};S.data=null;S.modal=null;S.toast="";render();}catch(e){flash(e.message);}return;}
  if(action.startsWith("export:")){
+  if(S.preview)return flash("CSV exports are disabled in the read-only preview.");
   const kind=action.slice(7);window.location.href="/api/export?kind="+encodeURIComponent(kind);return;
  }
 });
