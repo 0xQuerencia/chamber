@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity as ActivityIcon, ArrowDownToLine, Bell, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Plus, RefreshCw, Search, Settings, ShieldAlert, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ChevronRight, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, ShieldAlert, Users, X } from "lucide-react";
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
+import DeskWorkspace from "./DeskWorkspace";
+import CommandPalette, { type CommandOption } from "./CommandPalette";
 import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, SectionMotion, StatusBadge, type Column } from "./components";
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
 
@@ -72,6 +74,10 @@ export default function App(){
  const [toast,setToast]=useState("");
  const [loadedAt,setLoadedAt]=useState("");
  const [period,setPeriod]=useState(monthNow());
+ const [commandOpen,setCommandOpen]=useState(false);
+ const [mobileNavOpen,setMobileNavOpen]=useState(false);
+ const [docFilter,setDocFilter]=useState<"all"|DocumentStatus>("all");
+ const [workSort,setWorkSort]=useState<"due"|"client"|"recent">("due");
  const today=new Date().toISOString().slice(0,10);
  const principal=workspace?.user.role==="principal";
  const privileged=workspace?.user.role==="principal"||workspace?.user.role==="manager";
@@ -90,13 +96,13 @@ export default function App(){
   void getSession().then(async s=>{if(!alive)return;setSession(s);if(s.authenticated){const d=await getWorkspace();if(alive){setWorkspace(d);setLoadedAt(new Date().toLocaleString("en-IN"))}}}).catch(e=>{if(alive){setError(String(e));setSession({authenticated:false,needs_setup:false,user:null})}});
   return()=>{alive=false};
  },[enterPreview]);
- const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all")},[]);
+ const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false)},[]);
  useEffect(()=>{
   const handler=(e:KeyboardEvent)=>{
    if(!workspace)return;
-   if(e.key==="Escape"){setModal(null);setSelected(null);return}
+   if(e.key==="Escape"){setModal(null);setSelected(null);setCommandOpen(false);setMobileNavOpen(false);return}
+   if(e.ctrlKey&&e.key.toLowerCase()==="k"){e.preventDefault();if(!modal)setCommandOpen(true);return}
    if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
-   if(e.ctrlKey&&e.key.toLowerCase()==="k"){e.preventDefault();navigate("work");window.setTimeout(()=>document.getElementById("register-search")?.focus(),0);return}
    if(e.altKey&&e.key.toLowerCase()==="n"){e.preventDefault();if(!preview&&privileged)setModal("task");return}
    if(e.altKey&&e.key.toLowerCase()==="c"){e.preventDefault();if(!preview&&privileged)setModal("client");return}
    const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity"};
@@ -131,13 +137,34 @@ export default function App(){
   {workspace?.documents.filter(d=>d.task_id===t.id).length===0&&<p className="muted small">No document requirements.</p>}
   <div style={{marginTop:15}}><Button onClick={()=>open("document")}><Plus size={15}/> Add requirement</Button></div>
  </div>;
- const filteredTasks=useMemo(()=>!workspace?[]:workspace.tasks.filter(t=>{
-  const text=[t.title,t.service,t.period,clientName(t.client_id),memberName(t.assignee_id)].join(" ").toLowerCase();
-  if(query&&!text.includes(query.toLowerCase()))return false;
-  if(workFilter==="mine"&&t.assignee_id!==workspace.user.id)return false;
-  if(workFilter==="overdue")return Boolean(t.due_date&&t.due_date<today&&t.status!=="done");
-  return workFilter==="all"||workFilter==="mine"||t.status===workFilter;
- }),[workspace,query,workFilter,clientName,memberName,today]);
+ const filteredTasks=useMemo(()=>{
+   if(!workspace)return [];
+   const rows=workspace.tasks.filter(t=>{
+     const text=[t.title,t.service,t.period,clientName(t.client_id),memberName(t.assignee_id)].join(" ").toLowerCase();
+     if(query&&!text.includes(query.toLowerCase()))return false;
+     if(workFilter==="mine"&&t.assignee_id!==workspace.user.id)return false;
+     if(workFilter==="overdue")return Boolean(t.due_date&&t.due_date<today&&t.status!=="done");
+     return workFilter==="all"||workFilter==="mine"||t.status===workFilter;
+   });
+   return rows.sort((a,b)=>workSort==="client"
+       ?clientName(a.client_id).localeCompare(clientName(b.client_id))
+       :workSort==="recent"?(b.updated_at||"").localeCompare(a.updated_at||"")
+       :(a.due_date||"9999").localeCompare(b.due_date||"9999"));
+ },[workspace,query,workFilter,clientName,memberName,today,workSort]);
+ const commands:CommandOption[]=useMemo(()=>{
+   if(!workspace)return [];
+   const nav:CommandOption[]=navItems.map(n=>({id:"nav-"+n.id,group:"Navigate",title:n.label,hint:"Open "+n.label,onSelect:()=>navigate(n.id)}));
+   const tasks:CommandOption[]=workspace.tasks.map(t=>({id:"task-"+t.id,group:"Assignments",title:t.title,hint:clientName(t.client_id)+" · "+t.service+" · "+statusLabel(t.status),keywords:t.period||"",onSelect:()=>{navigate("work");setSelected(t.id)}}));
+   const clients:CommandOption[]=workspace.clients.map(c=>({id:"client-"+c.id,group:"Clients",title:c.name,hint:c.category,onSelect:()=>{navigate("clients");setSelected(c.id)}}));
+   const docs:CommandOption[]=workspace.documents.map(d=>({id:"document-"+d.id,group:"Documents",title:d.name,hint:clientName(d.client_id)+" · "+statusLabel(d.status),onSelect:()=>{navigate("documents");setSelected(d.id)}}));
+   const actions:CommandOption[]=preview||!privileged?[]:[
+     {id:"create-task",group:"Actions",title:"Create assignment",hint:"Add work for a client",onSelect:()=>open("task")},
+     {id:"create-client",group:"Actions",title:"Create client",hint:"Add to Client Master",onSelect:()=>open("client")},
+     {id:"create-document",group:"Actions",title:"Add document requirement",hint:"Track missing data",onSelect:()=>open("document")}
+   ];
+   return [...nav,...actions,...tasks,...clients,...docs];
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[workspace,preview,privileged,navigate,clientName]);
  const taskCols:Column<Task>[]=[
   {key:"client",title:"Client / Work",render:t=><><button className="cell-link" onClick={()=>{setView("work");setSelected(t.id)}}>{clientName(t.client_id)}</button><div className="secondary-cell">{t.title}</div></>},
   {key:"service",title:"Service / Period",render:t=><>{t.service}<div className="secondary-cell">{t.period??"—"}</div></>},
@@ -164,48 +191,43 @@ export default function App(){
  function registerSearch(placeholder:string){return <input id="register-search" className="search" aria-label={placeholder} value={query} onChange={e=>setQuery(e.target.value)} placeholder={placeholder}/>}
  function previewBanner(){return preview?<div className="notice" style={{marginBottom:18}}>SAMPLE PREVIEW · Fictional records. All mutations, exports and messages are disabled. <button className="text-button" onClick={()=>window.location.assign("/")}>Exit preview</button></div>:null}
  function showDesk(){
-  const tasks=workspace!.tasks;const cards:[string,number,string,WorkFilter][]=[
-   ["Pending",tasks.filter(t=>t.status==="todo").length,"blue","todo"],["Waiting for Client",tasks.filter(t=>t.status==="waiting").length,"amber","waiting"],["In Review",tasks.filter(t=>t.status==="review").length,"violet","review"],["Overdue",tasks.filter(t=>t.due_date&&t.due_date<today&&t.status!=="done").length,"rose","overdue"],["Completed",tasks.filter(t=>t.status==="done").length,"green","done"]
-  ];
-  const upcoming=tasks.filter(t=>t.status!=="done").slice().sort((a,b)=>(a.due_date??"9999").localeCompare(b.due_date??"9999")).slice(0,7);
-  return <>{previewBanner()}<Heading title="Desk" subtitle="Firm overview, today's work and upcoming compliance" actions={<Button kind="primary" onClick={()=>open("task")}><Plus size={16}/> New assignment</Button>}/>
-   <div className="cards">{cards.map(([name,num,tone,filter])=><button className={"kpi "+tone} key={name} onClick={()=>{navigate("work");setWorkFilter(filter)}}><div><label>{name}</label><div className="number">{num}</div></div><ClipboardList className="kpi-icon"/></button>)}</div>
-   <div className="desk-grid">
-    <section><Panel title="Today's work" actions={<button className="text-button" onClick={()=>navigate("work")}>View all work</button>}><p className="muted small">Open assignments and approaching deadlines</p></Panel><Register columns={taskCols.filter(c=>c.key!=="action")} rows={upcoming} empty="No open work"/></section>
-    <Panel title="Team workload" actions={<button className="text-button" onClick={()=>navigate("team")}>View team</button>}>{workspace!.staff.map(m=>{const count=tasks.filter(t=>t.assignee_id===m.id&&t.status!=="done").length;return <div className="stats-line" key={m.id}><Avatar name={m.name}/><div className="grow"><strong className="small">{m.name}</strong><div className="hint">{m.role}</div></div><div className="progress"><i style={{width:Math.min(100,count/12*100)+"%"}}/></div><span className="tiny">{count} work</span></div>})}</Panel>
-    <Panel title="Upcoming deadlines" actions={<button className="text-button" onClick={()=>navigate("compliance")}>View calendar</button>}>{upcoming.filter(t=>t.due_date).map(t=><div key={t.id} className="stats-line"><div className="grow"><strong className="small">{t.service}</strong><div className="hint">{clientName(t.client_id)} · {t.title}</div></div><span className="tiny nowrap">{formatDate(t.due_date)}</span></div>)}{!upcoming.length&&<Empty title="No upcoming work"/>}</Panel>
-    <Panel title="Review queue">{tasks.filter(t=>t.status==="review").map(t=><div className="stats-line" key={t.id}><div className="grow"><strong className="small">{clientName(t.client_id)}</strong><div className="hint">{t.title}</div></div><Button kind="sm" onClick={()=>{navigate("work");setSelected(t.id)}}>Review</Button></div>)}{!tasks.some(t=>t.status==="review")&&<Empty title="Nothing awaiting review"/>}</Panel>
-   </div>
-  </>;
+   return <>{previewBanner()}<DeskWorkspace workspace={workspace!} today={today}
+     preview={preview}
+     onNavigate={(page,filter)=>{navigate(page);if(filter)setWorkFilter(filter)}}
+     onTask={(id)=>{navigate("work");setSelected(id)}}
+     onDocument={(id)=>{navigate("documents");setSelected(id)}}
+     onNew={()=>open("task")}/></>;
  }
  function showWork(){
-  const options:[WorkFilter,string][]=[["all","All"],["mine","Mine"],["todo","Pending"],["waiting","Waiting"],["review","In review"],["overdue","Overdue"],["done","Completed"]];
+  const options:[WorkFilter,string][]=[["all","All work"],["mine","Assigned to me"],["todo","Pending"],["waiting","Waiting"],["review","In review"],["overdue","Overdue"],["done","Completed"]];
   const detail=workspace!.tasks.find(t=>t.id===selected);
-  return <>{previewBanner()}<Heading title="Work Register" subtitle="Assignments, ownership, statuses and dates" actions={<>{privileged&&<Button kind="primary" onClick={()=>open("task")}><Plus size={16}/> New work</Button>}<Button onClick={()=>download("tasks")}><ArrowDownToLine size={16}/> Export CSV</Button></>}/>
-   <div className="segmented">{options.map(([value,label])=><button key={value} className={"chip "+(workFilter===value?"active":"")} onClick={()=>setWorkFilter(value)}>{label}</button>)}</div>
-   <div className="toolbar">{registerSearch("Search clients, work, services, assignees…")}<Button onClick={()=>void refresh()}><RefreshCw size={15}/> Refresh</Button></div>
-   <Register columns={taskCols} rows={filteredTasks} empty="No matching assignments"/>
-   {detail&&<div style={{marginTop:18}}>{taskDetails(detail)}</div>}
+  return <>{previewBanner()}<Heading title="Work Register" subtitle="Track every client assignment, owner and reporting period" actions={<>{privileged&&<Button kind="primary" onClick={()=>open("task")}><Plus size={16}/> New work</Button>}<Button onClick={()=>download("tasks")}><ArrowDownToLine size={16}/> Export CSV</Button></>}/>
+   <div className="register-tools">
+     <div className="segmented" role="group" aria-label="Filter assignments">{options.map(([value,label])=><button key={value} aria-pressed={workFilter===value} className={"chip "+(workFilter===value?"active":"")} onClick={()=>setWorkFilter(value)}>{label}{value==="overdue"&&<b>{workspace!.tasks.filter(t=>t.due_date&&t.due_date<today&&t.status!=="done").length}</b>}</button>)}</div>
+     <div className="toolbar">{registerSearch("Find a client, service, assignment…")}<label className="visually-hidden" htmlFor="work-sort">Sort work</label><select id="work-sort" className="control sort-control" value={workSort} onChange={e=>setWorkSort(e.target.value as "due"|"client"|"recent")}><option value="due">Due date first</option><option value="recent">Recently updated</option><option value="client">Client A–Z</option></select><Button onClick={()=>void refresh()}><RefreshCw size={15}/> Refresh</Button></div>
+   </div>
+   <div className={detail?"register-with-detail":""}><Register columns={taskCols} rows={filteredTasks} empty="No matching assignments"/>
+   {detail&&<aside className="record-inspector" aria-label="Assignment details">{taskDetails(detail)}</aside>}</div>
   </>;
  }
  function showClients(){
   const rows=workspace!.clients.filter(c=>[c.name,c.email,c.category,c.pan,c.gstin].join(" ").toLowerCase().includes(query.toLowerCase()));
   const active=workspace!.clients.find(c=>c.id===selected);
   return <>{previewBanner()}<Heading title="Client Master" subtitle="Central client records and service history" actions={<>{privileged&&<Button kind="primary" onClick={()=>open("client")}><Plus size={16}/> New client</Button>}<Button onClick={()=>download("clients")}><ArrowDownToLine size={16}/> Export CSV</Button></>}/>
-   <div className="toolbar">{registerSearch("Search client, email, PAN or GSTIN…")}</div><div className={active?"split-grid":""}><Register columns={clientCols} rows={rows} empty="No clients yet"/>{active&&<div className="detail-card"><div className="detail-head"><div><h2>{active.name}</h2><StatusBadge status={active.category}/></div><button className="close-button" onClick={()=>setSelected(null)}><X size={18}/></button></div>
+   <div className="toolbar">{registerSearch("Search client, email, PAN or GSTIN…")}</div><div className={active?"register-with-detail":""}><Register columns={clientCols} rows={rows} empty="No clients yet"/>{active&&<div className="detail-card"><div className="detail-head"><div><h2>{active.name}</h2><StatusBadge status={active.category}/></div><button className="close-button" onClick={()=>setSelected(null)}><X size={18}/></button></div>
     <div className="detail-kv"><div><label>Email</label><span>{active.email??"—"}</span></div><div><label>Phone</label><span>{active.phone??"—"}</span></div><div><label>PAN</label><span>{active.pan?"••••"+active.pan.slice(-4):"—"}</span></div><div><label>GSTIN</label><span>{active.gstin?"••••"+active.gstin.slice(-4):"—"}</span></div></div>
     <div className="detail-tabs"><span>Assignments</span></div>{workspace!.tasks.filter(t=>t.client_id===active.id).map(t=><div className="detail-mini" key={t.id}><strong>{t.title}</strong><p>{t.service} · {statusLabel(t.status)} · {formatDate(t.due_date)}</p></div>)}</div>}</div>
   </>;
  }
  function showDocuments(){
-  const rows=workspace!.documents.filter(d=>[d.name,clientName(d.client_id),findTask(d.task_id)?.title].join(" ").toLowerCase().includes(query.toLowerCase()));
+  const rows=workspace!.documents.filter(d=>(docFilter==="all"||d.status===docFilter)&&[d.name,clientName(d.client_id),findTask(d.task_id)?.title].join(" ").toLowerCase().includes(query.toLowerCase()));
   const active=workspace!.documents.find(d=>d.id===selected);
   const draft=active?"Dear Sir/Madam,\n\nPlease provide "+active.name+" required for "+(findTask(active.task_id)?.title??"the assignment")+" ("+(findTask(active.task_id)?.period??"current period")+").\n\nRegards,\n"+workspace!.firm.name:"";
   const client=active?workspace!.clients.find(c=>c.id===active.client_id):null;
   return <>{previewBanner()}<Heading title="Document Register" subtitle="Missing, requested and received client information" actions={<><Button kind="primary" onClick={()=>open("document")}><Plus size={16}/> Add requirement</Button><Button onClick={()=>download("documents")}><ArrowDownToLine size={16}/> Export CSV</Button></>}/>
-   <div className="segmented"><span className="chip">All <b>{workspace!.documents.length}</b></span>{(["missing","requested","received","verified"] as DocumentStatus[]).map(s=><span className="chip" key={s}>{statusLabel(s)} <b>{workspace!.documents.filter(d=>d.status===s).length}</b></span>)}</div>
+   <div className="segmented" role="group" aria-label="Document status filter"><button aria-pressed={docFilter==="all"} className={"chip "+(docFilter==="all"?"active":"")} onClick={()=>setDocFilter("all")}>All <b>{workspace!.documents.length}</b></button>{(["missing","requested","received","verified"] as DocumentStatus[]).map(st=><button aria-pressed={docFilter===st} className={"chip "+(docFilter===st?"active":"")} key={st} onClick={()=>setDocFilter(st)}>{statusLabel(st)} <b>{workspace!.documents.filter(d=>d.status===st).length}</b></button>)}</div>
    <div className="toolbar">{registerSearch("Search client, assignment or document…")}</div>
-   <div className={active?"split-grid":""}><Register columns={docCols} rows={rows} empty="No document requirements"/>{active&&<div className="detail-card">
+   <div className={active?"register-with-detail":""}><Register columns={docCols} rows={rows} empty="No document requirements"/>{active&&<div className="detail-card">
     <div className="detail-head"><div><p className="hint">DOCUMENT REQUIREMENT</p><h2>{active.name}</h2><p className="muted small">{clientName(active.client_id)}</p></div><button className="close-button" onClick={()=>setSelected(null)}><X size={18}/></button></div>
     <div className="detail-kv"><div><label>Assignment</label><span>{findTask(active.task_id)?.title??"—"}</span></div><div><label>Requested</label><span>{formatDate(active.requested_at)}</span></div></div>
     <div className="field" style={{marginTop:18}}><label htmlFor="document-status">Update document status</label><select id="document-status" value={active.status} disabled={busy||preview||(!privileged&&active.status==="verified")} onChange={e=>changeDocument(active,e.target.value as DocumentStatus)}>{docStatuses.filter(s=>privileged||(s!=="verified"&&s!=="not_applicable")).map(s=><option key={s} value={s}>{statusLabel(s)}</option>)}</select></div>
