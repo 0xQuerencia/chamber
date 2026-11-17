@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run build && wrangler dev",
+    "dev": "vite",
     "dev:frontend": "vite",
     "dev:api": "wrangler dev",
     "build": "tsc --noEmit && vite build",
@@ -12,12 +12,15 @@
     "deploy": "npm run build && wrangler deploy",
     "db:local": "wrangler d1 migrations apply DB --local",
     "db:remote": "wrangler d1 migrations apply DB --remote",
-    "check": "npm run typecheck && node --check src/worker.js && node --test tests/*.test.js"
+    "check": "npm run typecheck && node --check src/worker.js && node --test tests/*.test.js",
+    "dev:worker": "wrangler dev",
+    "dev:preview": "npm run build && wrangler dev"
   },
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "animejs": "^4.2.2"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",
