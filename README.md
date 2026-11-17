@@ -34,7 +34,18 @@ See [product specification](docs/product-spec.md) and [delivery roadmap](docs/ro
 
 ## Getting started
 
-The app targets Cloudflare Workers with static assets and a D1 database. Infrastructure and local-development commands will be added with the implementation PR.
+Frontend: **React 19 + TypeScript + Vite**. Animation: **Anime.js v4**, scoped to React elements with reduced-motion support. API and scheduled jobs currently run on a Cloudflare Worker backed by D1.
+
+```bash
+npm install
+npm run db:local
+npm run dev:preview
+```
+
+For fast frontend-only HMR, run `npm run dev:worker` and `npm run dev` in separate terminals. Vite proxies `/api` to the Worker running on port 8787. Production: `npm run deploy` builds the typechecked frontend and uploads `dist` static assets together with the Worker.
+
+To inspect a read-only fictional workspace before firm setup, open `/?preview=1`. Never import preview records into a real firm.
+
 
 ## Security
 
