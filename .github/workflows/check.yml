@@ -32,8 +32,9 @@ jobs:
           npx wrangler dev --ip 127.0.0.1 --port 8787 > /tmp/chamber-wrangler.log 2>&1 &
           WORKER_PID=$!
           trap 'kill $WORKER_PID || true; cat /tmp/chamber-wrangler.log' EXIT
-          for i in $(seq 1 40); do
+          for i in $(seq 1 20); do
             if curl --fail --silent http://127.0.0.1:8787/api/health > /dev/null; then break; fi
-            sleep 2
+            if ! kill -0 $WORKER_PID 2>/dev/null; then cat /tmp/chamber-wrangler.log; exit 1; fi
+            sleep 1
           done
           node tests/smoke.mjs
