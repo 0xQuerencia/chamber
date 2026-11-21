@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -37,3 +37,11 @@ export const addTaskComment=(id:string,body:string)=>api<{id:string}>("/api/task
 export const getTaskHistory=(id:string)=>api<{events:TaskHistoryEvent[]}>("/api/tasks/"+encodeURIComponent(id)+"/history");
 export const toggleTaskTimer=(id:string,action:"start"|"stop")=>api<{ok:boolean;running:boolean;minutes?:number}>("/api/tasks/"+encodeURIComponent(id)+"/timer","POST",{action});
 export const getTaskTime=(id:string)=>api<{entries:TimerEntry[]}>("/api/tasks/"+encodeURIComponent(id)+"/time");
+
+export const importTemplateUrl="/api/imports/template";
+export const importErrorsUrl=(id:string)=>"/api/imports/"+encodeURIComponent(id)+"/errors";
+export const validateImportRows=(rows:ImportClientRow[])=>api<ImportPreview>("/api/imports/validate","POST",{rows});
+export const startClientImport=()=>api<{id:string}>("/api/imports","POST",{kind:"clients"});
+export const addImportRows=(id:string,rows:ImportClientRow[])=>api<ImportCommitResult>("/api/imports/"+encodeURIComponent(id)+"/rows","POST",{rows});
+export const completeClientImport=(id:string)=>api<{ok:boolean;imported:number;errors:number}>("/api/imports/"+encodeURIComponent(id)+"/complete","POST",{});
+export const undoClientImport=(id:string)=>api<{ok:boolean}>("/api/imports/"+encodeURIComponent(id)+"/undo","POST",{});
