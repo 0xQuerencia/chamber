@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, CircleHelp, ClipboardCopy, Inbox, RefreshCw, X } from "lucide-react";
 import { getTracker, getTrackerDetail, patchDocument, saveInwardReceipt } from "./api";
+import FileEvidence from "./FileEvidence";
 import type { DocumentStatus, TrackerCell, TrackerClient, TrackerDetail, TrackerSummary, Workspace } from "./types";
 
 const monthShort=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -221,13 +222,13 @@ export default function DataTracker({workspace,preview}:{workspace:Workspace;pre
      <p className="tracker-hint">Copying creates a draft only; no email or WhatsApp message is sent.</p>
      <div className="tracker-requirements">
       {chosen.documents.length===0&&<div className="tracker-detail-empty"><p>No checklist items configured for this period.</p><p>Use Compliance → Add requirement to define a reusable checklist.</p></div>}
-      {chosen.documents.map(d=><div key={d.id} className="tracker-requirement">
+      {chosen.documents.map(d=><div key={d.id}><div className="tracker-requirement">
        <label><input type="checkbox" disabled={!editable||isReceived(d.status)||busy} checked={checked.includes(d.id)}
          onChange={e=>setChecked(prev=>e.target.checked?[...prev,d.id]:prev.filter(x=>x!==d.id))}/>
         <span><strong>{d.name}</strong><small>{d.status.replaceAll("_"," ")}{d.received_at?" · "+dateLabel(d.received_at):""}{d.received_via?" · "+d.received_via:""}</small></span>
        </label>
        {canWaive&&editable&&!isReceived(d.status)&&<button type="button" className="tracker-link" disabled={busy} onClick={()=>void waive(d.id)}>N/A</button>}
-      </div>)}
+      </div><FileEvidence requirementId={d.id} preview={preview}/></div>)}
      </div>
      <div className="tracker-inward">
       <h3><Inbox size={16}/> Inward entry</h3>
