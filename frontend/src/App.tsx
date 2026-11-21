@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
@@ -10,6 +10,8 @@ import ImportWizard from "./ImportWizard";
 import Composer from "./Composer";
 import Insights from "./Insights";
 import Reminders from "./Reminders";
+import KeyboardHelp from "./KeyboardHelp";
+import {goShortcuts,isTextInteraction} from "./keyboard";
 import DeviceManager from "./DeviceManager";
 import SheetsSettings from "./SheetsSettings";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
@@ -68,7 +70,15 @@ function RecordForm({kind,workspace,onCancel,onSave,busy,error}:{kind:ModalKind;
   case "requirement":body=<><Select label="Service template" name="template_id" items={templates}/><Input label="Required document or information" name="name" required/><Input label="Sort order" name="sort_order" type="number" min="0" defaultValue="0"/><p className="hint">This requirement is added to all open generated tasks for the template and every future task.</p></>;break;
   case "override":body=<><Select label="Service template" name="template_id" items={templates}/><Input label="Work period (YYYY-MM, YYYY-Q1, or YYYY)" name="period" required/><Input label="New due date" name="new_due_date" type="date" required/><Input label="Source / notification reference" name="source_reference" required/><p className="hint">Manual override with an auditable source. Confirm the date before saving.</p></>;break;
  }
- return <Dialog title={titles[kind]} onClose={onCancel}>{error&&<div className="alert" role="alert">{error}</div>}<form onSubmit={submit}><div className="fields">{body}</div><div className="form-actions"><Button onClick={onCancel}>Cancel</Button><Button type="submit" kind="primary" disabled={busy}>{busy?"Saving…":"Save record"}</Button></div></form></Dialog>;
+ return <Dialog title={titles[kind]} onClose={onCancel}>{error&&<div className="alert" role="alert">{error}</div>}<form onSubmit={submit} onKeyDown={e=>{
+   const form=e.currentTarget;
+   if((e.ctrlKey&&e.key==="Enter")||(e.altKey&&e.key.toLowerCase()==="s")){e.preventDefault();form.requestSubmit();return}
+   if(e.key==="Enter"&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&e.target instanceof HTMLInputElement){
+    const fields=Array.from(form.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>("input:not([disabled]),select:not([disabled]),textarea:not([disabled])"));
+    const next=fields[fields.indexOf(e.target)+1];
+    if(next){e.preventDefault();next.focus()}
+   }
+  }}><div className="fields">{body}</div><div className="form-actions"><Button onClick={onCancel}>Cancel</Button><Button type="submit" kind="primary" disabled={busy}>{busy?"Saving…":"Save record"}</Button></div></form></Dialog>;
 }
 
 export default function App(){
@@ -86,6 +96,8 @@ export default function App(){
  const [loadedAt,setLoadedAt]=useState("");
  const [period,setPeriod]=useState(monthNow());
  const [commandOpen,setCommandOpen]=useState(false);
+ const [keyboardHelpOpen,setKeyboardHelpOpen]=useState(false);
+ const goKeyAt=useRef(0);
  const [mobileNavOpen,setMobileNavOpen]=useState(false);
  const [docFilter,setDocFilter]=useState<"all"|DocumentStatus>("all");
  const [workSort,setWorkSort]=useState<"due"|"client"|"recent">("due");
@@ -111,16 +123,39 @@ export default function App(){
  useEffect(()=>{
   const handler=(e:KeyboardEvent)=>{
    if(!workspace)return;
-   if(e.key==="Escape"){setModal(null);setSelected(null);setCommandOpen(false);setMobileNavOpen(false);return}
-   if(e.ctrlKey&&e.key.toLowerCase()==="k"){e.preventDefault();if(!modal)setCommandOpen(true);return}
-   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
+   if(keyboardHelpOpen)return;
+   if(e.key==="Escape"){
+    if(modal||selected||commandOpen||mobileNavOpen){setModal(null);setSelected(null);setCommandOpen(false);setMobileNavOpen(false)}
+    else navigate("desk");
+    goKeyAt.current=0;return;
+   }
+   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){
+    e.preventDefault();if(!modal)setCommandOpen(true);return;
+   }
+   if(modal||commandOpen||isTextInteraction(e.target))return;
+   if(e.key==="?"){e.preventDefault();setKeyboardHelpOpen(true);goKeyAt.current=0;return}
+   if(e.key==="/"){
+    e.preventDefault();
+    const search=document.getElementById("register-search")||
+      document.querySelector<HTMLInputElement>('input[aria-label="Search clients"],input[aria-label="Search client"]');
+    if(search instanceof HTMLInputElement)search.focus();else setCommandOpen(true);
+    goKeyAt.current=0;return;
+   }
+   if(!e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    const key=e.key.toLowerCase();
+    if(Date.now()-goKeyAt.current<1500&&goShortcuts[key]){
+      e.preventDefault();navigate(goShortcuts[key]);goKeyAt.current=0;return;
+    }
+    if(key==="g"){e.preventDefault();goKeyAt.current=Date.now();return}
+    goKeyAt.current=0;
+   }
    if(e.altKey&&e.key.toLowerCase()==="n"){e.preventDefault();if(!preview&&privileged)setModal("task");return}
    if(e.altKey&&e.key.toLowerCase()==="c"){e.preventDefault();if(!preview&&privileged)setModal("client");return}
    const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance",F8:"tracker",F9:"board"};
    if(pages[e.key]){e.preventDefault();navigate(pages[e.key])}
   };
   document.addEventListener("keydown",handler);return()=>document.removeEventListener("keydown",handler);
- },[workspace,navigate,preview,privileged]);
+ },[workspace,navigate,preview,privileged,keyboardHelpOpen,modal,selected,commandOpen,mobileNavOpen]);
  const mutate=async(action:()=>Promise<unknown>,message="Record saved.")=>{
   if(preview){flash("Read-only preview: changes are disabled.");return}
   setBusy(true);setError("");
@@ -346,6 +381,7 @@ export default function App(){
      <span className="erp-edition">CA Practice Management</span>
      <div className="erp-toolbar-buttons">
        <button type="button" onClick={()=>setCommandOpen(true)}><span className="erp-toolbar-key">G</span> Go To</button>
+        <button type="button" onClick={()=>setKeyboardHelpOpen(true)} aria-label="Keyboard shortcut help"><span className="erp-toolbar-key">?</span> Help</button>
        <button type="button" onClick={()=>navigate("work")}><span className="erp-toolbar-key">W</span> Work</button>
        <button type="button" onClick={()=>navigate("clients")}><span className="erp-toolbar-key">C</span> Clients</button>
        <button type="button" onClick={()=>navigate("reports")}><span className="erp-toolbar-key">R</span> Reports</button>
@@ -391,11 +427,14 @@ export default function App(){
      <span>Enter: Select</span>
      <span className="erp-status-divider">│</span>
      <span>Ctrl+K: Go To</span>
+     <span className="erp-status-divider">│</span>
+     <span>?: Shortcuts</span>
      <span className="erp-status-spacer"/>
      <span>Chamber · CA Firm Operations</span>
    </footer>
    {modal&&<RecordForm kind={modal} workspace={workspace} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
    {commandOpen&&<CommandPalette options={commands} onClose={()=>setCommandOpen(false)}/>}
+   {keyboardHelpOpen&&<KeyboardHelp onClose={()=>setKeyboardHelpOpen(false)}/>}
    {toast&&<div className="toast" role="status">{toast}</div>}
  </div>;
 }
