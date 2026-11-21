@@ -88,3 +88,31 @@
 .tp-selector button{display:block;width:100%;background:transparent;border:0;border-top:1px solid var(--tp-border);text-align:left;padding:5px 8px}
 .tp-selector button:hover{background:var(--tp-highlight)}
 @media(max-width:960px){.tp-app{width:960px;min-width:960px}.tp-workspace{min-width:810px}}
+
+
+/* Request and receipt vouchers from the supplied five-screen Tally reference. */
+.tp-voucher{max-width:880px;width:100%}
+.tp-voucher-head{display:flex;justify-content:space-between;align-items:center}
+.tp-form-line{padding:2px 8px;min-height:20px;display:flex;align-items:center;gap:4px;font-size:12px}
+.tp-form-label{display:inline-block;width:110px;flex:none}
+.tp-form-line select,.tp-voucher-table select{
+ background:transparent;border:0;border-bottom:1px dotted var(--tp-toolbar);
+ border-radius:0;color:var(--tp-text);font-size:12px;padding:0 2px;max-width:100%;
+}
+.tp-form-line select{min-width:130px}
+.tp-voucher-table{width:100%;border-collapse:collapse;font-size:12px}
+.tp-voucher-table th,.tp-voucher-table td{border:1px solid var(--tp-border);height:22px;padding:0 6px;white-space:nowrap;text-align:left}
+.tp-voucher-table th{background:var(--tp-menu-bg);font-weight:700}
+.tp-voucher-table th:first-child{width:34px}
+.tp-voucher-table td select{min-width:110px}
+.tp-voucher-table input.tp-remark-input,.tp-inline-input{
+ border:0;border-bottom:1px dotted var(--tp-toolbar);background:transparent;
+ width:100%;outline:0;color:var(--tp-text);border-radius:0;padding:1px 3px;font-size:12px
+}
+.tp-inline-input{width:220px}
+.tp-voucher-table tr.tp-selected select{font-weight:bold}
+.tp-voucher-submit{display:block;background:transparent;border:0;border-radius:0;width:100%;padding:4px 8px;text-align:left;font-size:12px;min-height:24px;color:var(--tp-text)}
+.tp-voucher-submit:hover{background:var(--tp-highlight)}
+.tp-voucher-preview{padding:6px 8px;margin-top:8px;font-size:12px;line-height:1.5}
+.tp-voucher-preview p{margin:2px 0 0}
+.tp-voucher-foot{font-size:12px;margin:8px 0;color:var(--tp-toolbar-dark)}
