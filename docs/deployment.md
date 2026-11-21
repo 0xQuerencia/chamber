@@ -33,3 +33,7 @@ The checked-in `wrangler.jsonc` contains an **unusable placeholder database UUID
 - `POST /api/login` issues a Secure, HttpOnly, SameSite=Strict cookie over HTTPS.
 - All business endpoints require an authenticated session and firm scoping.
 - Browser mutation requests must originate from the same origin.
+
+## TOTP for privileged users
+
+Before a production deployment, create a fresh **32-byte random key** and set its base64 value as the Worker secret `MFA_ENCRYPTION_KEY` (via the host's secret manager). Do not commit it to Git or reuse the public CI-only fixture. Principals and managers cannot receive a session cookie from password login without configuring this secret and completing authenticator enrollment/verification. Keep an encrypted backup of the key in the firm's approved recovery process: losing the key makes existing encrypted MFA enrollments unreadable. Do not deploy this migration before testing the enrollment and device-revocation flow in staging.
