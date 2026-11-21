@@ -58,7 +58,7 @@ test("Principal signs in with TOTP, creates a client and navigates registers",as
  await expect(page.locator(".erp-menu-caption")).toHaveText("GATEWAY OF CHAMBER");
  await page.locator(".erp-menu").getByRole("button",{name:"Clients",exact:true}).click();
  await expect(page.getByRole("heading",{name:"Client Master"})).toBeVisible();
- await page.getByRole("button",{name:"New client"}).click();
+ await page.getByRole("button",{name:"New client",exact:true}).click();
  await page.locator('form [name="name"]').fill("Browser Test Enterprises");
  await page.locator('form [name="category"]').selectOption("Business");
  await page.getByRole("button",{name:"Save record"}).click();
