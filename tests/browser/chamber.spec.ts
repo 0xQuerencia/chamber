@@ -68,11 +68,11 @@ test("Principal signs in with TOTP, creates a client and navigates registers",as
  await expect(page.getByRole("heading",{name:"Compliance Calendar"})).toBeVisible();
  await expect(page.getByText("Calendar rules and starter services")).toBeVisible();
  await page.keyboard.press("Control+k");
- await page.getByRole("combobox").fill("Firm Setup");
+ await page.getByRole("dialog",{name:"Search Chamber"}).getByRole("combobox").fill("Firm Setup");
  await page.getByRole("option",{name:/Firm Setup/i}).first().click();
  await expect(page.getByRole("heading",{name:"Set up your CA firm"})).toBeVisible();
  await page.keyboard.press("Control+k");
- await page.getByRole("combobox").fill("Security Audit");
+ await page.getByRole("dialog",{name:"Search Chamber"}).getByRole("combobox").fill("Security Audit");
  await page.getByRole("option",{name:/Security Audit/i}).first().click();
  await expect(page.getByRole("heading",{name:"Security Audit"})).toBeVisible();
 });
