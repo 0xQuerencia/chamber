@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed,OnboardingStatus,FirmProfile} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed,OnboardingStatus,FirmProfile,DeliveryReadiness,QueuedSend} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -93,3 +93,11 @@ export const getSecurityEvents=(page=0,event="")=>api<SecurityFeed>("/api/securi
 
 export const getOnboarding=()=>api<OnboardingStatus>("/api/onboarding");
 export const saveFirmProfile=(name:string,profile:FirmProfile)=>api<{ok:boolean}>("/api/onboarding/profile","PUT",{name,...profile});
+
+export const getDeliveryReadiness=()=>api<DeliveryReadiness>("/api/delivery/readiness");
+export const queueMessageBatch=(id:string,count:number,scheduledAt?:string)=>api<QueuedSend>("/api/delivery/batches/"+encodeURIComponent(id)+"/queue","POST",
+ {confirm_count:count,confirm_names:"CONFIRM",...(scheduledAt?{scheduled_at:scheduledAt}:{})});
+export const undoQueuedBatch=(id:string)=>api<{ok:boolean;undo:boolean}>("/api/delivery/batches/"+encodeURIComponent(id)+"/cancel","POST",{});
+export const retryFailedMessage=(batchId:string,messageId:string)=>api<{ok:boolean;status:string;send_after:string}>("/api/delivery/batches/"+encodeURIComponent(batchId)+"/retry","POST",{message_id:messageId});
+export const approveWhatsAppTemplate=(id:string,providerName:string,languageCode="en_US")=>api<{ok:boolean;note:string}>(
+ "/api/messages/templates/"+encodeURIComponent(id)+"/provider","PUT",{provider_template_id:providerName,language_code:languageCode,confirm_approved:true});

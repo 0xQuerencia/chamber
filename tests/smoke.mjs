@@ -354,6 +354,31 @@ assert.equal(configured.profile.contact_email,"contact@example.test");
 assert.deepEqual(configured.profile.working_days,[1,2,3,4,5,6]);
 assert.equal(configured.stages.profile,true);
 assert.equal(configured.completed_stages,5);
+// Sending remains disabled without firm-owned credentials and a release flag.
+const deliveryReadiness=ok(await call("/api/delivery/readiness"));
+assert.equal(deliveryReadiness.email,false);
+assert.equal(deliveryReadiness.whatsapp,false);
+const requestTemplate=ok(await call("/api/messages/templates","POST",{
+ name:"Monthly document request",channel:"whatsapp",
+ body:"Hello {client}, please supply {missing_list} for {month} by {due}."
+}));
+const outboundDraft=ok(await call("/api/messages/batches","POST",{
+ period:"2026-12",channel:"whatsapp",client_ids:[clientA.id],template_id:requestTemplate.id,confirm_count:1
+}));
+const noSend=await call("/api/delivery/batches/"+outboundDraft.id+"/queue","POST",{confirm_count:1,confirm_names:"CONFIRM"});
+assert.equal(noSend.res.status,503);
+const failedWebhook=await call("/api/webhooks/whatsapp","POST",{object:"whatsapp_business_account",entry:[]},"");
+assert.equal(failedWebhook.res.status,503);
+const submittedTemplate=await call("/api/messages/templates/"+requestTemplate.id+"/provider","PUT",{
+ provider_template_id:"monthly_document_request",language_code:"en_US",confirm_approved:true
+});
+assert.equal(submittedTemplate.res.status,200);
+const listedTemplates=ok(await call("/api/messages/templates"));
+assert.equal(listedTemplates.templates.find(t=>t.id===requestTemplate.id).provider_template_id,"monthly_document_request");
+const denyProviderUpdate=await call("/api/messages/templates/"+requestTemplate.id+"/provider","PUT",{
+ provider_template_id:"bad_override",confirm_approved:true
+},staffCookie);
+assert.equal(denyProviderUpdate.res.status,403);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");

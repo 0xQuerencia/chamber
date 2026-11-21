@@ -24,6 +24,7 @@ import "@fontsource/ibm-plex-sans/700.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/600.css";
 import "./blueprint-tokens.css";
+import "./delivery.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");

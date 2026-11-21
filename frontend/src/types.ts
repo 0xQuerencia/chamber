@@ -42,9 +42,9 @@ export interface ImportCommitResult {accepted:number;rejected:ImportRowIssue[];a
 export type MessageChannel="email"|"whatsapp";
 export interface MessagePreviewItem {client_id:string;client_name:string;eligible:boolean;reason:string|null;recipient:string|null;contact_id:string|null;missing_count:number;body:string}
 export interface MessagePreview {channel:MessageChannel;period:string;previews:MessagePreviewItem[];eligible:number;skipped:number}
-export interface MessageBatch {id:string;channel:MessageChannel;period:string;status:string;recipient_count:number;created_at?:string}
-export interface MessageBatchDetail {batch:MessageBatch;messages:Array<{id:string;client_id:string;client_name:string;recipient:string;body:string;status:string;error:string|null}>;delivery_enabled:boolean}
-export interface MessageTemplate {id:string;name:string;channel:MessageChannel;category:string;body:string;approval_status:string;active:number}
+export interface MessageBatch {id:string;channel:MessageChannel;period:string;status:string;recipient_count:number;created_at?:string;scheduled_at?:string|null;queued_at?:string|null}
+export interface MessageBatchDetail {batch:MessageBatch;messages:Array<{id:string;client_id:string;client_name:string;recipient:string;body:string;status:string;error:string|null;sent_at?:string|null;delivered_at?:string|null;read_at?:string|null;send_attempts?:number}>;delivery_enabled:boolean}
+export interface MessageTemplate {id:string;name:string;channel:MessageChannel;category:string;body:string;approval_status:string;active:number;provider_template_id?:string|null;language_code?:string}
 
 export type ReportKind="due_soon"|"overdue"|"missing"|"unassigned"|"review"|"waiting";
 export interface DashboardDeadline {id:string;title:string;client_id:string;client_name:string;service:string;period:string|null;status:string;due_date:string|null;ask_by_date:string|null;assignee_name:string|null}
@@ -85,3 +85,6 @@ export interface OnboardingStatus {
  security:{mfa_enabled:boolean};
  note:string
 }
+
+export interface DeliveryReadiness {email:boolean;whatsapp:boolean;safety:{scheduled_undo_seconds:number;quiet_hours_ist:string;template_approval_required:boolean}}
+export interface QueuedSend {ok:true;status:"queued";send_after:string;undo_until:string;count:number}
