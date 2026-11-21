@@ -24,6 +24,7 @@ export async function handleWhatsAppWebhook(request,env){
  for(const entry of body.entry.slice(0,20)){
   for(const change of (Array.isArray(entry.changes)?entry.changes:[]).slice(0,20)){
    const value=change.value||{};
+   if(String(value.metadata?.phone_number_id||"")!==String(env.WHATSAPP_PHONE_ID||""))continue;
    const statuses=Array.isArray(value.statuses)?value.statuses:[];
    for(const record of statuses.slice(0,100)){
     const providerId=String(record.id||"");
