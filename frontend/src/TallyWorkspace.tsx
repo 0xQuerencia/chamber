@@ -5,7 +5,7 @@ type Props={workspace:Workspace;onNavigate:(view:View)=>void;preview:boolean};
 type Entry={label:string;view:View};
 const sections:{label:string;items:Entry[]}[]=[
  {label:"MASTERS",items:[{label:"Clients",view:"clients"},{label:"Staff",view:"team"},{label:"Compliance Types",view:"compliance"}]},
- {label:"TRANSACTIONS",items:[{label:"Data Request",view:"requests"},{label:"Data Received",view:"tracker"},{label:"Task Allocation",view:"board"}]},
+ {label:"TRANSACTIONS",items:[{label:"Data Request",view:"requests"},{label:"Data Received",view:"documents"},{label:"Task Allocation",view:"board"}]},
  {label:"REPORTS",items:[{label:"Pending Data Tracker",view:"tracker"},{label:"Staff Work Register",view:"work"},{label:"Compliance Summary",view:"compliance"}]},
  {label:"UTILITIES",items:[{label:"WhatsApp Communication",view:"requests"},{label:"Firm Settings",view:"settings"}]}
 ];
