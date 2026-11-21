@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -55,3 +55,6 @@ export const getMessageBatches=()=>api<{batches:MessageBatch[];delivery_enabled:
 export const cancelMessageBatch=(id:string)=>api<{ok:boolean}>("/api/messages/batches/"+encodeURIComponent(id)+"/cancel","POST",{});
 export const getMessageTemplates=()=>api<{templates:MessageTemplate[]}>("/api/messages/templates");
 export const createMessageTemplate=(name:string,channel:MessageChannel,body:string)=>api<{id:string}>("/api/messages/templates","POST",{name,channel,body});
+
+export const getInsights=()=>api<DashboardReport>("/api/reports/dashboard");
+export const getInsightDrill=(kind:ReportKind,page=0)=>api<DrillReport>("/api/reports/drilldown?kind="+encodeURIComponent(kind)+"&page="+page);

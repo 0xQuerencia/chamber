@@ -2,7 +2,7 @@ export type Role="principal"|"manager"|"staff";
 export type Priority="low"|"medium"|"high";
 export type TaskStatus="todo"|"in_progress"|"waiting"|"blocked"|"review"|"done";
 export type DocumentStatus="missing"|"requested"|"received"|"verified"|"rejected"|"not_applicable";
-export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"compliance"|"team"|"reports"|"activity"|"settings";
+export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"insights"|"compliance"|"team"|"reports"|"activity"|"settings";
 export type WorkFilter="all"|"mine"|"overdue"|TaskStatus;
 export interface Member {id:string;name:string;email:string;role:Role;active?:number}
 export interface Client {id:string;name:string;category:string;email:string|null;phone:string|null;pan:string|null;gstin:string|null;notes?:string|null;created_at:string;updated_at?:string;code?:string|null;client_group?:string|null;manager_id?:string|null}
@@ -45,3 +45,12 @@ export interface MessagePreview {channel:MessageChannel;period:string;previews:M
 export interface MessageBatch {id:string;channel:MessageChannel;period:string;status:string;recipient_count:number;created_at?:string}
 export interface MessageBatchDetail {batch:MessageBatch;messages:Array<{id:string;client_id:string;client_name:string;recipient:string;body:string;status:string;error:string|null}>;delivery_enabled:boolean}
 export interface MessageTemplate {id:string;name:string;channel:MessageChannel;category:string;body:string;approval_status:string;active:number}
+
+export type ReportKind="due_soon"|"overdue"|"missing"|"unassigned"|"review"|"waiting";
+export interface DashboardDeadline {id:string;title:string;client_id:string;client_name:string;service:string;period:string|null;status:string;due_date:string|null;ask_by_date:string|null;assignee_name:string|null}
+export interface DashboardActivity {id:string;event:string;entity_type:string;entity_id:string;at:string;actor_name:string|null}
+export interface DashboardWorkload {id:string;name:string;role:string;capacity_hours_per_week:number;open_tasks:number;estimated_minutes:number;load_percent:number}
+export interface DashboardService {service:string;total:number;done:number;overdue:number}
+export interface DashboardReport {today:string;through:string;kpis:Record<ReportKind,number>;team_count:number;deadlines:DashboardDeadline[];activity:DashboardActivity[];workload:DashboardWorkload[];services:DashboardService[];responsiveness:{received_count:number;avg_response_days:number|null}}
+export interface DrillRow {id:string;title:string;status:string;client_id:string;client_name:string;service:string;period:string|null;due_date:string|null;ask_by_date:string|null}
+export interface DrillReport {kind:ReportKind;total:number;page:number;rows:DrillRow[]}

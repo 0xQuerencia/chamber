@@ -173,6 +173,15 @@ assert.ok(snap.clients.some(c=>c.code==="CL-IMPORT"));
 ok(await call("/api/imports/"+importBatch.id+"/undo","POST",{}));
 snap=ok(await call("/api/bootstrap"));
 assert.equal(snap.clients.some(c=>c.code==="CL-IMPORT"),false);
+const dashboard=ok(await call("/api/reports/dashboard"));
+assert.ok(dashboard.team_count>=2);
+assert.ok(Array.isArray(dashboard.deadlines));
+for(const kind of ["due_soon","overdue","missing","unassigned","review","waiting"]){
+ const report=ok(await call("/api/reports/drilldown?kind="+kind));
+ assert.equal(report.total,dashboard.kpis[kind],"Every KPI must equal its drilldown total");
+}
+const deniedDashboard=await call("/api/reports/dashboard","GET",undefined,staffCookie);
+assert.equal(deniedDashboard.res.status,403);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");
