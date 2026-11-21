@@ -9,6 +9,7 @@ import WorkBoard from "./WorkBoard";
 import ImportWizard from "./ImportWizard";
 import Composer from "./Composer";
 import Insights from "./Insights";
+import Reminders from "./Reminders";
 import DeviceManager from "./DeviceManager";
 import SheetsSettings from "./SheetsSettings";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
@@ -16,7 +17,7 @@ import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, StatusBadge, t
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
 
 const navItems:{id:View;label:string;icon:typeof Home}[]=[
- {id:"desk",label:"Desk",icon:Home},{id:"work",label:"Work Register",icon:ClipboardList},{id:"board",label:"Work Board",icon:ClipboardList},{id:"myday",label:"My Day",icon:ClipboardList},{id:"clients",label:"Clients",icon:Users},{id:"import",label:"Import Clients",icon:ArrowDownToLine},{id:"requests",label:"Bulk Requests",icon:ClipboardList},{id:"insights",label:"Practice Dashboard",icon:ChartColumn},
+ {id:"desk",label:"Desk",icon:Home},{id:"work",label:"Work Register",icon:ClipboardList},{id:"board",label:"Work Board",icon:ClipboardList},{id:"myday",label:"My Day",icon:ClipboardList},{id:"clients",label:"Clients",icon:Users},{id:"import",label:"Import Clients",icon:ArrowDownToLine},{id:"requests",label:"Bulk Requests",icon:ClipboardList},{id:"reminders",label:"Reminders",icon:CalendarDays},{id:"insights",label:"Practice Dashboard",icon:ChartColumn},
  {id:"documents",label:"Documents",icon:FolderOpen},{id:"tracker",label:"Data Tracker",icon:FolderOpen},{id:"compliance",label:"Compliance",icon:CalendarDays},
  {id:"team",label:"Team",icon:BriefcaseBusiness},{id:"reports",label:"Reports",icon:ChartColumn},
  {id:"activity",label:"Activity & Sync",icon:ActivityIcon},{id:"settings",label:"Settings",icon:Settings}
@@ -314,12 +315,12 @@ export default function App(){
    </>;
   }
  let page:ReactNode=null;
- if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
+ if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  if(!session.authenticated||!workspace)return <Authentication needsSetup={session.needs_setup} onSubmit={handleAuth} error={error} busy={busy} onPreview={enterPreview}/>;
  const groups:{name:string;items:View[]}[]=[
   {name:"MASTERS",items:["clients","team","import"]},
-  {name:"TRANSACTIONS",items:["work","board","myday","documents","tracker","requests"]},
+  {name:"TRANSACTIONS",items:["work","board","myday","documents","tracker","requests","reminders"]},
   {name:"REPORTS",items:["compliance","insights","reports","activity"]},
   {name:"UTILITIES",items:["settings"]}
  ];

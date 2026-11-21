@@ -2,7 +2,7 @@ export type Role="principal"|"manager"|"staff";
 export type Priority="low"|"medium"|"high";
 export type TaskStatus="todo"|"in_progress"|"waiting"|"blocked"|"review"|"done";
 export type DocumentStatus="missing"|"requested"|"received"|"verified"|"rejected"|"not_applicable";
-export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"insights"|"compliance"|"team"|"reports"|"activity"|"settings";
+export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"reminders"|"insights"|"compliance"|"team"|"reports"|"activity"|"settings";
 export type WorkFilter="all"|"mine"|"overdue"|TaskStatus;
 export interface Member {id:string;name:string;email:string;role:Role;active?:number}
 export interface Client {id:string;name:string;category:string;email:string|null;phone:string|null;pan:string|null;gstin:string|null;notes?:string|null;created_at:string;updated_at?:string;code?:string|null;client_group?:string|null;manager_id?:string|null}
@@ -62,3 +62,8 @@ export interface SheetsStatus {connected:boolean;spreadsheet_id:string|null;last
 
 export type ScanStatus="pending"|"clean"|"infected"|"failed";
 export interface StoredDocument {id:string;filename:string;mime_type:string;size_bytes:number;sha256:string;scan_status:ScanStatus;created_at:string;scanned_at:string|null}
+
+export interface ReminderPolicy {enabled:number;ask_days:number;remind_days:number;escalate_days:number;max_reminders:number;quiet_start:string;quiet_end:string}
+export type ReminderStatus="pending"|"prepared"|"resolved"|"dismissed";
+export interface ReminderItem {id:string;client_id:string;client_name:string;client_code:string|null;period:string;stage:"ask"|"remind"|"escalate";due_date:string;missing_count:number;status:ReminderStatus;prepared_batch_id:string|null;created_at:string;paused_until:string|null}
+export interface ReminderFeed {items:ReminderItem[];total:number;page:number;delivery_enabled:boolean}
