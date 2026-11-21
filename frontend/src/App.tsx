@@ -11,6 +11,7 @@ import Composer from "./Composer";
 import Insights from "./Insights";
 import Reminders from "./Reminders";
 import KeyboardHelp from "./KeyboardHelp";
+import MfaAuth from "./MfaAuth";
 import {goShortcuts,isTextInteraction} from "./keyboard";
 import DeviceManager from "./DeviceManager";
 import SheetsSettings from "./SheetsSettings";
@@ -83,6 +84,7 @@ function RecordForm({kind,workspace,onCancel,onSave,busy,error}:{kind:ModalKind;
 
 export default function App(){
  const [session,setSession]=useState<Session|null>(null);
+ const [mfaPending,setMfaPending]=useState<{challenge:string;enrollmentRequired:boolean;deviceLabel:string}|null>(null);
  const [workspace,setWorkspace]=useState<Workspace|null>(null);
  const [preview,setPreview]=useState(false);
  const [view,setView]=useState<View>("desk");
@@ -165,7 +167,14 @@ export default function App(){
   setBusy(true);setError("");
   try{
    if(session?.needs_setup){const token=values.setup_token;await setup({firm:values.firm,name:values.name,email:values.email,password:values.password},token);setSession({authenticated:false,needs_setup:false,user:null});flash("Firm created. Sign in to continue.")}
-   else{await login(values.email,values.password,values.device_label);const d=await getWorkspace();setWorkspace(d);setSession({authenticated:true,needs_setup:false,user:d.user});setLoadedAt(new Date().toLocaleString("en-IN"))}
+   else{
+    const result=await login(values.email,values.password,values.device_label);
+    if("requires_mfa" in result&&result.requires_mfa){
+     setMfaPending({challenge:result.challenge,enrollmentRequired:result.enrollment_required,deviceLabel:values.device_label||"Browser session"});
+     return;
+    }
+    const d=await getWorkspace();setWorkspace(d);setSession({authenticated:true,needs_setup:false,user:d.user});setLoadedAt(new Date().toLocaleString("en-IN"));
+   }
   }catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy(false)}
  };
  const create=async(kind:ModalKind,values:Record<string,string>)=>{
@@ -352,6 +361,11 @@ export default function App(){
  let page:ReactNode=null;
  if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
+ if(mfaPending)return <MfaAuth challenge={mfaPending.challenge} enrollmentRequired={mfaPending.enrollmentRequired}
+    deviceLabel={mfaPending.deviceLabel} onCancel={()=>{setMfaPending(null);setError("")}} onAuthenticated={async()=>{
+      const d=await getWorkspace();setWorkspace(d);setSession({authenticated:true,needs_setup:false,user:d.user});
+      setLoadedAt(new Date().toLocaleString("en-IN"));setMfaPending(null);setError("");
+    }}/>;
  if(!session.authenticated||!workspace)return <Authentication needsSetup={session.needs_setup} onSubmit={handleAuth} error={error} busy={busy} onPreview={enterPreview}/>;
  const groups:{name:string;items:View[]}[]=[
   {name:"MASTERS",items:["clients","team","import"]},

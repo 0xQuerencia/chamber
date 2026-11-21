@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -10,7 +10,7 @@ export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"="GET"
 }
 export const getSession=()=>api<Session>("/api/session");
 export const getWorkspace=()=>api<Workspace>("/api/bootstrap");
-export const login=(email:string,password:string,deviceLabel="")=>api<{ok:boolean}>("/api/login","POST",{email,password,device_label:deviceLabel});
+export const login=(email:string,password:string,deviceLabel="")=>api<LoginResult>("/api/login","POST",{email,password,device_label:deviceLabel});
 export const logout=()=>api<{ok:boolean}>("/api/logout","POST",{});
 export const setup=(values:Payload,token:string)=>api<{ok:boolean}>("/api/setup","POST",values,{"X-Setup-Token":token});
 export const createRecord=(kind:"clients"|"tasks"|"documents"|"staff"|"templates"|"enrollments"|"requirements"|"overrides",values:Payload)=>api<{id?:string;ok?:boolean}>("/api/"+kind,"POST",values);
@@ -85,3 +85,6 @@ export const pauseClientReminders=(id:string,until:string,reason:string)=>api<{o
 export const resumeClientReminders=(id:string)=>api<{ok:boolean}>("/api/reminders/clients/"+encodeURIComponent(id)+"/resume","POST",{});
 export const markReminderPrepared=(id:string,batchId:string)=>api<{ok:boolean}>("/api/reminders/"+encodeURIComponent(id)+"/prepared","POST",{batch_id:batchId});
 export const dismissReminder=(id:string,reason:string)=>api<{ok:boolean}>("/api/reminders/"+encodeURIComponent(id)+"/dismiss","POST",{reason});
+
+export const startMfaEnrollment=(challenge:string)=>api<MfaEnrollment>("/api/mfa/setup","POST",{challenge});
+export const verifyMfa=(challenge:string,code:string,deviceLabel:string)=>api<{ok:true}>("/api/mfa/verify","POST",{challenge,code,device_label:deviceLabel});

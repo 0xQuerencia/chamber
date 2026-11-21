@@ -67,3 +67,6 @@ export interface ReminderPolicy {enabled:number;ask_days:number;remind_days:numb
 export type ReminderStatus="pending"|"prepared"|"resolved"|"dismissed";
 export interface ReminderItem {id:string;client_id:string;client_name:string;client_code:string|null;period:string;stage:"ask"|"remind"|"escalate";due_date:string;missing_count:number;status:ReminderStatus;prepared_batch_id:string|null;created_at:string;paused_until:string|null}
 export interface ReminderFeed {items:ReminderItem[];total:number;page:number;delivery_enabled:boolean}
+
+export type LoginResult={ok:true}|{requires_mfa:true;enrollment_required:boolean;challenge:string;expires_in_seconds:number};
+export interface MfaEnrollment {secret:string;otpauth_uri:string;expires_in_seconds:number}
