@@ -50,10 +50,10 @@ export async function sendGmail(env,recipient,subject,body,fetcher=fetch){
  try{response=await fetcher("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{
   method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
   body:JSON.stringify({raw:b64Url(lines.join("\r\n"))})
- })}catch{throw new ProviderFailure("Gmail request failed over the network",true)}
+ })}catch{throw new ProviderFailure("Gmail send outcome is uncertain; reconcile in Sent before retrying",false)}
  if(!response.ok){
   if(response.status===401||response.status===403)throw new ProviderFailure("Gmail access expired or lacks send permission",false);
-  throw new ProviderFailure("Gmail send rejected ("+response.status+")",response.status===429||response.status>=500);
+  throw new ProviderFailure("Gmail send rejected ("+response.status+")",response.status===429);
  }
  const result=await response.json().catch(()=>null);
  if(!result?.id)throw new ProviderFailure("Gmail returned no message identifier",true);
@@ -77,11 +77,11 @@ export async function sendWhatsAppTemplate(env,recipient,template,variables,fetc
  try{response=await fetcher("https://graph.facebook.com/"+version+"/"+encodeURIComponent(env.WHATSAPP_PHONE_ID)+"/messages",{
   method:"POST",headers:{"Authorization":"Bearer "+env.WHATSAPP_TOKEN,"Content-Type":"application/json"},
   body:JSON.stringify(payload)
- })}catch{throw new ProviderFailure("WhatsApp transport unavailable",true)}
+ })}catch{throw new ProviderFailure("WhatsApp send outcome is uncertain; reconcile before retrying",false)}
  if(!response.ok){
   if(response.status===400||response.status===401||response.status===403)
    throw new ProviderFailure("WhatsApp rejected the approved template or account credentials",false);
-  throw new ProviderFailure("WhatsApp provider error ("+response.status+")",response.status===429||response.status>=500);
+  throw new ProviderFailure("WhatsApp provider error ("+response.status+")",response.status===429);
  }
  const json=await response.json().catch(()=>null);
  if(!json?.messages?.[0]?.id)throw new ProviderFailure("WhatsApp returned no message ID",true);
