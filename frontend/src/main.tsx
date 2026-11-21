@@ -17,6 +17,13 @@ import "./keyboard.css";
 import "./mfa.css";
 import "./security.css";
 import "./onboarding.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-sans/700.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import "./blueprint-tokens.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
