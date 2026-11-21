@@ -2,7 +2,7 @@ export type Role="principal"|"manager"|"staff";
 export type Priority="low"|"medium"|"high";
 export type TaskStatus="todo"|"in_progress"|"waiting"|"blocked"|"review"|"done";
 export type DocumentStatus="missing"|"requested"|"received"|"verified"|"rejected"|"not_applicable";
-export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"compliance"|"team"|"reports"|"activity"|"settings";
+export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"compliance"|"team"|"reports"|"activity"|"settings";
 export type WorkFilter="all"|"mine"|"overdue"|TaskStatus;
 export interface Member {id:string;name:string;email:string;role:Role;active?:number}
 export interface Client {id:string;name:string;category:string;email:string|null;phone:string|null;pan:string|null;gstin:string|null;notes?:string|null;created_at:string;updated_at?:string;code?:string|null;client_group?:string|null;manager_id?:string|null}
@@ -33,3 +33,8 @@ export interface WorkloadResponse {members:WorkloadMember[];unassigned:number;po
 export interface TaskComment {id:string;body:string;author:string;created_at:string}
 export interface TaskHistoryEvent {id:string;from_status:string|null;to_status:string;note:string|null;at:string;actor_name:string|null}
 export interface TimerEntry {user_id:string;started_at:string;stopped_at:string|null;duration_minutes:number|null}
+
+export interface ImportClientRow {source_index:number;code?:string;name:string;category?:string;client_group?:string;pan?:string;gstin?:string;email?:string;phone?:string;notes?:string}
+export interface ImportRowIssue {index:number;errors:string[]}
+export interface ImportPreview {accepted:number;rejected:number;rows:ImportRowIssue[]}
+export interface ImportCommitResult {accepted:number;rejected:ImportRowIssue[];already:number}
