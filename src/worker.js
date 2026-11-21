@@ -8,6 +8,7 @@ import { handleMessages } from "./messages.js";
 import { handleReports } from "./reports.js";
 import { handleSheetSettings, scheduledSheetSync } from "./sheets.js";
 import { handleFiles, scanCallback } from "./files.js";
+import { handleReminderApi, refreshReminderSuggestions } from "./reminders.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 
 const enc = new TextEncoder();
@@ -439,6 +440,8 @@ async function api(request,env) {
     if(path.startsWith("/api/reports/"))return handleReports(request,env,user,{output,fail,isPrivileged});
     if(path.startsWith("/api/messages/"))
       return handleMessages(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
+    if(path==="/api/reminders"||path.startsWith("/api/reminders/"))
+      return handleReminderApi(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON});
     if(path==="/api/imports"||path.startsWith("/api/imports/"))
       return handleImports(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail,csvCell});
     if(path==="/api/workload" || /^\/api\/tasks\/[a-f0-9-]+\/(?:assignment|review|comments|timer|time)$/.test(path))
@@ -466,8 +469,10 @@ export default {
     }
     const now=new Date();
     const months=[0,1,2].map(i=>new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+i,1)).toISOString().slice(0,7));
-    ctx.waitUntil((async()=>{for(const month of months)await generatePeriod(env.DB,month)})()
-      .catch(error=>console.error("Chamber recurrence failure",error.message)));
+    ctx.waitUntil((async()=>{
+      for(const month of months)await generatePeriod(env.DB,month);
+      await refreshReminderSuggestions(env.DB);
+    })().catch(error=>console.error("Chamber daily workflow failed",error.message)));
   },
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
