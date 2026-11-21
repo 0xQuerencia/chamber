@@ -11,6 +11,12 @@ export const goShortcuts:Readonly<Record<string,View>>={
 };
 export const shortcuts:ShortcutDef[]=[
  {key:"Ctrl+K",label:"Go to / search",description:"Find any screen, client, assignment, or requirement",group:"Global"},
+ {key:"Alt+G",label:"Go To",description:"Open the Tally-style screen and record selector",group:"Global"},
+ {key:"F1 / F11",label:"Help",description:"Open keyboard help and available features",group:"Global"},
+ {key:"F2",label:"Date",description:"Change the displayed working date",group:"Global"},
+ {key:"F3",label:"Firm",description:"View the active firm",group:"Global"},
+ {key:"F4–F9",label:"Function keys",description:"Open Clients, Work, Documents, Request, Receive or Tasks",group:"Global"},
+ {key:"F10",label:"Gateway",description:"Return to Gateway of Chamber",group:"Global"},
  {key:"?",label:"Keyboard help",description:"Show or hide this shortcut guide",group:"Global"},
  {key:"/",label:"Focus filter",description:"Focus the current list filter or open Go to",group:"Global"},
  {key:"Esc",label:"Back / close",description:"Close panels and dialogs; return to the desk",group:"Global"},
@@ -26,6 +32,7 @@ export const shortcuts:ShortcutDef[]=[
  {key:"A",label:"Assign",description:"Open assignment controls on a Work Board card",group:"Registers"},
  {key:"R",label:"Request",description:"Open a data request from a tracker cell",group:"Registers"},
  {key:"M",label:"Mark received",description:"Open inward entry from a tracker cell",group:"Registers"},
+ {key:"Ctrl+A",label:"Continue voucher",description:"Open the verified request or receipt workflow; no direct sending",group:"Forms"},
  {key:"Ctrl+Enter",label:"Submit form",description:"Save the active record form",group:"Forms"},
  {key:"Alt+S",label:"Save form",description:"Save the active record form",group:"Forms"},
  {key:"Tab / Shift+Tab",label:"Move between fields",description:"Navigate a form in field order",group:"Forms"}
