@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Archive, ArrowUpRight, CheckCircle2, Plus, X } from "lucide-react";
 import { addClientContact, addClientGstin, archiveClient, getClientProfile, updateClient } from "./api";
+import PortalLinks from "./PortalLinks";
 import type { Client, ClientProfileData, Workspace } from "./types";
 
 type Tab="overview"|"services"|"data"|"tasks"|"documents"|"messages"|"activity";
@@ -128,6 +129,7 @@ export default function ClientProfile({client,workspace,privileged,preview,onRef
   </section>}
   {tab==="documents"&&<section className="client-subsection"><h3>Document requirements</h3>
    {docs.length===0?<p className="muted small">No document requirements.</p>:docs.map(d=><div key={d.id} className="client-contact"><strong>{d.name}</strong><span>{d.status.replaceAll("_"," ")}</span><p>Requested {date(d.requested_at)}</p></div>)}
+   {privileged&&<PortalLinks clientId={client.id} preview={preview}/>}
   </section>}
   {tab==="messages"&&<section className="client-subsection"><h3>Client messages</h3><p className="muted small">No delivery integration is configured. Drafts are not recorded as sent messages.</p></section>}
   {tab==="activity"&&<section className="client-subsection"><h3>Recent activity</h3>
