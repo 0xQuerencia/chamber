@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import PortalNotifications from "./PortalNotifications";
 import { Check, CheckCheck, ClipboardList, Clock, MessageSquare, Play, Square, UserRound, X } from "lucide-react";
 import { addTaskComment, assignTask, getTaskComments, getTaskHistory, getTaskTime, getWorkload, patchTask, reviewTask, toggleTaskTimer } from "./api";
 import type { Task, TaskComment, TaskHistoryEvent, TimerEntry, WorkloadMember, Workspace } from "./types";
@@ -98,6 +99,7 @@ export default function WorkBoard({workspace,preview,mode,onRefresh}:{
   {preview&&<div className="board-banner">Fictional, read-only example. Changes are disabled.</div>}
   {error&&<div className="alert" role="alert">{error}</div>}
   {message&&<div className="board-banner" role="status">{message}</div>}
+  {mode==="myday"&&<PortalNotifications preview={preview} onOpenTask={setActiveId}/>}
   {privileged&&mode==="board"&&workload.length>0&&<section className="board-people" aria-label="Assignment capacity">
    <h2>Team workload <small>Next 14 days</small></h2>
    <div className="board-people-list">{workload.map(m=><div key={m.id} className="board-person">
