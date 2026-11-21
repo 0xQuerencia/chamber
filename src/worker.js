@@ -9,6 +9,7 @@ import { handleReports } from "./reports.js";
 import { handleSheetSettings, scheduledSheetSync } from "./sheets.js";
 import { handleFiles, scanCallback } from "./files.js";
 import { handleReminderApi, refreshReminderSuggestions } from "./reminders.js";
+import {beginMfaChallenge,handleMfa} from "./mfa.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 
 const enc = new TextEncoder();
@@ -114,18 +115,25 @@ async function handleLogin(request, env) {
     return fail("Invalid email or password", 401);
   }
   await env.DB.prepare("DELETE FROM login_attempts WHERE email=?").bind(email).run();
+  if(isPrivileged(user)){
+    if(!env.MFA_ENCRYPTION_KEY)return fail("MFA deployment secret is not configured",503);
+    return beginMfaChallenge(env,user,{output,hashToken,iso});
+  }
+  return issueSession(request,env,user,data.device_label);
+
+async function issueSession(request,env,user,deviceLabel){
   const token=[...crypto.getRandomValues(new Uint8Array(32))].map(v=>v.toString(16).padStart(2,"0")).join("");
-  const deviceId=id(),at=iso(),label=clean(data.device_label,80)||"Browser session";
+  const deviceId=id(),at=iso(),label=clean(deviceLabel,80)||"Browser session";
   const agent=clean(request.headers.get("User-Agent")||"Unknown browser",180);
   await env.DB.batch([
     env.DB.prepare("INSERT INTO devices(id,firm_id,user_id,label,user_agent,first_seen_at,last_seen_at) VALUES (?,?,?,?,?,?,?)")
-     .bind(deviceId,user.firm_id,user.id,label,agent,at,at),
+      .bind(deviceId,user.firm_id,user.id,label,agent,at,at),
     env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,created_at,device_id,last_active_at) VALUES (?,?,?,?,?,?)")
-     .bind(await hashToken(token),user.id,new Date(Date.now()+SESSION_DAYS*86400000).toISOString(),at,deviceId,at),
+      .bind(await hashToken(token),user.id,new Date(Date.now()+SESSION_DAYS*86400000).toISOString(),at,deviceId,at),
     await audit(env.DB,user,"signed_in","device",deviceId,{label})
   ]);
-  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  return output({ ok: true }, 200, { "Set-Cookie": "chamber_session=" + token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800" + secure });
+  const secure=new URL(request.url).protocol==="https:"?"; Secure":"";
+  return output({ok:true},200,{"Set-Cookie":"chamber_session="+token+"; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800"+secure});
 }
 async function bootstrap(db, user) {
   const privileged = isPrivileged(user);
@@ -395,6 +403,8 @@ async function api(request,env) {
     }
     if(path==="/api/setup"&&method==="POST") return handleSetup(request,env);
     if(path==="/api/login"&&method==="POST") return handleLogin(request,env);
+    if(path==="/api/mfa/setup"||path==="/api/mfa/verify")
+      return handleMfa(request,env,{output,fail,bodyJSON,hashToken,issueSession,iso,audit});
     const user=await sessionFor(request,env.DB);
     if(!user) return fail("Sign in required",401);
     if(path==="/api/logout"&&method==="POST"){
