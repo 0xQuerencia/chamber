@@ -49,4 +49,9 @@ To inspect a read-only fictional workspace before firm setup, open `/?preview=1`
 
 ## Security
 
-This repository is private. Do not commit client records, credentials, deployment secrets or database dumps.
+This repository is currently **public**. Do not commit client records, credentials, deployment secrets, database dumps or scanned documents. The owner should decide whether the application's security and intellectual-property policy requires making it private before a real-firm pilot.
+ 
+### Release status
+The active application on the existing Cloudflare Worker is **not** the same as the unmerged draft PR stack. Treat the latest `feat/chamber-release-ops` branch as a release candidate for staging, not a production-ready deployment.
+ 
+Features requiring external authorization (Gmail, WhatsApp Cloud API, Google Sheets, private R2 scanner and client email OTP) must remain disabled until each provider is connected and verified by a principal. See `docs/release-acceptance.md` for the staging, disaster recovery and go/no-go checks.

@@ -1,0 +1,23 @@
+{
+  // Copy this file to wrangler.staging.jsonc and replace the database ID.
+  // Never connect preview builds to chamber-db or production R2.
+  "name": "chamber-erp-staging",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-01",
+  "triggers": { "crons": ["0 1 * * *", "*/1 * * * *"] },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "chamber-staging-db",
+    "database_id": "REPLACE_WITH_A_NEW_STAGING_D1_ID",
+    "migrations_dir": "migrations"
+  }],
+  "r2_buckets": [{
+    "binding": "FILES",
+    "bucket_name": "chamber-staging-files"
+  }]
+}
