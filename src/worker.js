@@ -4,6 +4,7 @@ import { handleWorkflow } from "./tracker.js";
 import { handleClientMaster } from "./clients.js";
 import { handleWork } from "./work.js";
 import { handleImports } from "./imports.js";
+import { handleMessages } from "./messages.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 
 const enc = new TextEncoder();
@@ -397,6 +398,8 @@ async function api(request,env) {
     if(path==="/api/enrollments"&&method==="POST") return handleEnroll(await bodyJSON(request),env,user);
     if(path==="/api/recurrence"&&method==="POST") return handleGenerate(await bodyJSON(request),env,user);
     if(path==="/api/export"&&method==="GET") return handleExport(request,env,user);
+    if(path.startsWith("/api/messages/"))
+      return handleMessages(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
     if(path==="/api/imports"||path.startsWith("/api/imports/"))
       return handleImports(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail,csvCell});
     if(path==="/api/workload" || /^\/api\/tasks\/[a-f0-9-]+\/(?:assignment|review|comments|timer|time)$/.test(path))
