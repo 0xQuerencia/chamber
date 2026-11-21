@@ -1,3 +1,4 @@
+import {canReadClient} from "./permissions.js";
 const MAX_BYTES=15*1024*1024;
 const TYPES={
  "application/pdf":/\.pdf$/i,
@@ -20,7 +21,8 @@ function headerName(raw){
 async function requirementFor(db,user,reqId){
  const row=await db.prepare("SELECT d.id,d.client_id,d.task_id,d.status,t.assignee_id FROM documents d JOIN tasks t ON t.id=d.task_id AND t.firm_id=d.firm_id WHERE d.firm_id=? AND d.id=?").bind(user.firm_id,reqId).first();
  if(!row)return null;
- if(user.role!=="principal"&&user.role!=="manager"&&row.assignee_id!==user.id)return null;
+ if(!(await canReadClient(db,user,row.client_id)))return null;
+ if(user.role==="staff"&&row.assignee_id!==user.id)return null;
  return row;
 }
 export async function handleFiles(request,env,user,deps){
