@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, AlertCircle, ArrowLeft, ArrowRight, CalendarClock, CheckCircle2, ClipboardList, Clock, FileWarning, RefreshCw, UserRound, Users, X } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeft, ArrowRight, CalendarClock, CheckCircle2, ClipboardList, Clock, FileWarning, RefreshCw, Users, X } from "lucide-react";
 import { getInsightDrill, getInsights } from "./api";
 import type { DashboardReport, DrillReport, ReportKind, View } from "./types";
 
