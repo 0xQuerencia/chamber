@@ -9,6 +9,7 @@ import WorkBoard from "./WorkBoard";
 import ImportWizard from "./ImportWizard";
 import Composer from "./Composer";
 import Insights from "./Insights";
+import DeviceManager from "./DeviceManager";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
 import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, StatusBadge, type Column } from "./components";
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
@@ -40,7 +41,7 @@ function Authentication({needsSetup,onSubmit,error,busy,onPreview}:{needsSetup:b
   {error&&<div role="alert" className="alert">{error}</div>}
   <form onSubmit={submit}><div className="fields" style={{gridTemplateColumns:"1fr"}}>
    {needsSetup&&<><Input label="Firm name" name="firm" required/><Input label="Your name" name="name" required/></>}
-   <Input label="Work email" name="email" type="email" required/><Input label="Password" name="password" type="password" required/>
+   <Input label="Work email" name="email" type="email" required/><Input label="Password" name="password" type="password" required/>{!needsSetup&&<Input label="This PC / browser name" name="device_label" defaultValue="Office browser"/>}
    {needsSetup&&<Input label="One-time setup token" name="setup_token" type="password" required/>}
   </div><div className="form-actions"><Button type="submit" kind="primary" disabled={busy}>{busy?"Please wait…":needsSetup?"Create firm":"Sign in"}</Button></div></form>
   <hr className="subtle-sep"/><button type="button" className="text-button" onClick={onPreview}>Explore a read-only sample workspace</button>
@@ -127,7 +128,7 @@ export default function App(){
   setBusy(true);setError("");
   try{
    if(session?.needs_setup){const token=values.setup_token;await setup({firm:values.firm,name:values.name,email:values.email,password:values.password},token);setSession({authenticated:false,needs_setup:false,user:null});flash("Firm created. Sign in to continue.")}
-   else{await login(values.email,values.password);const d=await getWorkspace();setWorkspace(d);setSession({authenticated:true,needs_setup:false,user:d.user});setLoadedAt(new Date().toLocaleString("en-IN"))}
+   else{await login(values.email,values.password,values.device_label);const d=await getWorkspace();setWorkspace(d);setSession({authenticated:true,needs_setup:false,user:d.user});setLoadedAt(new Date().toLocaleString("en-IN"))}
   }catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy(false)}
  };
  const create=async(kind:ModalKind,values:Record<string,string>)=>{
@@ -295,7 +296,21 @@ export default function App(){
   <Panel title="Activity trail"><div className="timeline">{workspace!.activity.length===0?<Empty title="No recorded activity"/>:workspace!.activity.map(e=><div key={e.id} className="event"><strong>{e.actor_name??"Automation"} · {e.event} {e.entity_type}</strong><p>{e.entity_type} · {e.entity_id.slice(0,8)}</p><time>{formatDate(e.at)}</time></div>)}</div></Panel>
   <Panel title="System status"><div className="stats-line"><span className="green-dot"/><strong>{preview?"Sample data · read only":"Connected to Chamber API"}</strong></div><div className="stats-line"><div className="grow"><strong>Last data load</strong><div className="hint">{loadedAt}</div></div></div><div className="notice">WhatsApp Business and direct mail delivery integrations are not yet configured.</div></Panel>
   </div></>}
- function showSettings(){return <>{previewBanner()}<Heading title="Settings" subtitle="Firm account and integration settings"/><Panel title="Firm account"><div className="detail-kv"><div><label>Firm</label><span>{workspace!.firm.name}</span></div><div><label>User</label><span>{workspace!.user.name}</span></div><div><label>Role</label><span>{workspace!.user.role}</span></div><div><label>Email</label><span>{workspace!.user.email}</span></div></div><div style={{marginTop:20}}><Button onClick={()=>{if(preview){window.location.assign("/");return}void logout().then(()=>{setWorkspace(null);setSession({authenticated:false,needs_setup:false,user:null})}).catch(e=>setError(String(e)))}}><LogOut size={15}/> {preview?"Exit preview":"Sign out"}</Button></div></Panel></>}
+ function showSettings(){
+   return <>{previewBanner()}<Heading title="Settings" subtitle="Firm account, devices and integrations"/>
+    <Panel title="Firm account"><div className="detail-kv">
+     <div><label>Firm</label><span>{workspace!.firm.name}</span></div>
+     <div><label>User</label><span>{workspace!.user.name}</span></div>
+     <div><label>Role</label><span>{workspace!.user.role}</span></div>
+     <div><label>Email</label><span>{workspace!.user.email}</span></div>
+    </div><div style={{marginTop:20}}><Button onClick={()=>{
+      if(preview){window.location.assign("/");return}
+      void logout().then(()=>{setWorkspace(null);setSession({authenticated:false,needs_setup:false,user:null})}).catch(e=>setError(String(e)))
+    }}><LogOut size={15}/> {preview?"Exit preview":"Sign out"}</Button></div>
+    </Panel>
+    <DeviceManager preview={preview} role={workspace!.user.role}/>
+   </>;
+  }
  let page:ReactNode=null;
  if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;

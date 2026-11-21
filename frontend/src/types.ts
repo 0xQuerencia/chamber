@@ -54,3 +54,6 @@ export interface DashboardService {service:string;total:number;done:number;overd
 export interface DashboardReport {today:string;through:string;kpis:Record<ReportKind,number>;team_count:number;deadlines:DashboardDeadline[];activity:DashboardActivity[];workload:DashboardWorkload[];services:DashboardService[];responsiveness:{received_count:number;avg_response_days:number|null}}
 export interface DrillRow {id:string;title:string;status:string;client_id:string;client_name:string;service:string;period:string|null;due_date:string|null;ask_by_date:string|null}
 export interface DrillReport {kind:ReportKind;total:number;page:number;rows:DrillRow[]}
+
+export interface NamedDevice {id:string;label:string;user_agent:string;first_seen_at:string;last_seen_at:string;trusted:number;revoked_at:string|null;user_id:string;user_name:string}
+export interface DeviceList {devices:NamedDevice[];current_device_id:string|null}

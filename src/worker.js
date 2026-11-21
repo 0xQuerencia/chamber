@@ -10,6 +10,7 @@ import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./c
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
+const SESSION_IDLE_MINUTES = 30;
 const iso = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
 const fail = (message, code = 400) => output({ error: message }, code);
@@ -55,12 +56,21 @@ function assertOrigin(request) {
   return origin === expected;
 }
 async function sessionFor(request, db) {
-  const cookie = (request.headers.get("Cookie") || "").split(";").map(x => x.trim()).find(x => x.startsWith("chamber_session="));
-  if (!cookie) return null;
-  const token = cookie.slice("chamber_session=".length);
-  if (!/^[a-f0-9]{64}$/.test(token)) return null;
-  return db.prepare("SELECT u.id,u.firm_id,u.name,u.email,u.role,u.active FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1")
-    .bind(await hashToken(token), iso()).first();
+  const cookie=(request.headers.get("Cookie")||"").split(";").map(x=>x.trim()).find(x=>x.startsWith("chamber_session="));
+  if(!cookie)return null;
+  const token=cookie.slice("chamber_session=".length);
+  if(!/^[a-f0-9]{64}$/.test(token))return null;
+  const tokenHash=await hashToken(token),now=iso();
+  const idleCutoff=new Date(Date.now()-SESSION_IDLE_MINUTES*60000).toISOString();
+  const row=await db.prepare("SELECT u.id,u.firm_id,u.name,u.email,u.role,u.active,s.device_id,s.last_active_at FROM sessions s JOIN users u ON s.user_id=u.id LEFT JOIN devices d ON d.id=s.device_id AND d.user_id=u.id AND d.firm_id=u.firm_id WHERE s.token_hash=? AND s.expires_at>? AND COALESCE(s.last_active_at,s.created_at)>? AND u.active=1 AND (s.device_id IS NULL OR (d.id IS NOT NULL AND d.revoked_at IS NULL))")
+   .bind(tokenHash,now,idleCutoff).first();
+  if(!row)return null;
+  if(!row.last_active_at||row.last_active_at<new Date(Date.now()-60000).toISOString()){
+   const updates=[db.prepare("UPDATE sessions SET last_active_at=? WHERE token_hash=?").bind(now,tokenHash)];
+   if(row.device_id)updates.push(db.prepare("UPDATE devices SET last_seen_at=? WHERE id=? AND firm_id=?").bind(now,row.device_id,row.firm_id));
+   await db.batch(updates);
+  }
+  return row;
 }
 async function audit(db, user, event, entityType, entityId, details = {}) {
   return db.prepare("INSERT INTO activity (id,firm_id,actor_id,event,entity_type,entity_id,details,at) VALUES (?,?,?,?,?,?,?,?)")
@@ -101,11 +111,15 @@ async function handleLogin(request, env) {
     return fail("Invalid email or password", 401);
   }
   await env.DB.prepare("DELETE FROM login_attempts WHERE email=?").bind(email).run();
-  const token = [...crypto.getRandomValues(new Uint8Array(32))].map(v => v.toString(16).padStart(2, "0")).join("");
+  const token=[...crypto.getRandomValues(new Uint8Array(32))].map(v=>v.toString(16).padStart(2,"0")).join("");
+  const deviceId=id(),at=iso(),label=clean(data.device_label,80)||"Browser session";
+  const agent=clean(request.headers.get("User-Agent")||"Unknown browser",180);
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)")
-      .bind(await hashToken(token), user.id, new Date(Date.now() + SESSION_DAYS * 86400000).toISOString(), iso()),
-    await audit(env.DB,user,"signed_in","session",user.id)
+    env.DB.prepare("INSERT INTO devices(id,firm_id,user_id,label,user_agent,first_seen_at,last_seen_at) VALUES (?,?,?,?,?,?,?)")
+     .bind(deviceId,user.firm_id,user.id,label,agent,at,at),
+    env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,created_at,device_id,last_active_at) VALUES (?,?,?,?,?,?)")
+     .bind(await hashToken(token),user.id,new Date(Date.now()+SESSION_DAYS*86400000).toISOString(),at,deviceId,at),
+    await audit(env.DB,user,"signed_in","device",deviceId,{label})
   ]);
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return output({ ok: true }, 200, { "Set-Cookie": "chamber_session=" + token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800" + secure });
@@ -389,6 +403,25 @@ async function api(request,env) {
       return output({ok:true},200,{"Set-Cookie":"chamber_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"});
     }
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
+    if(path==="/api/devices"&&method==="GET"){
+      const principal=user.role==="principal";
+      const devices=(await env.DB.prepare("SELECT d.id,d.label,d.user_agent,d.first_seen_at,d.last_seen_at,d.trusted,d.revoked_at,d.user_id,u.name AS user_name FROM devices d JOIN users u ON u.id=d.user_id AND u.firm_id=d.firm_id WHERE d.firm_id=? "+(principal?"":"AND d.user_id=? ")+"ORDER BY d.last_seen_at DESC LIMIT 300")
+       .bind(...(principal?[user.firm_id]:[user.firm_id,user.id])).all()).results;
+      return output({devices,current_device_id:user.device_id??null});
+    }
+    const revoke=path.match(/^\/api\/devices\/([a-f0-9-]+)\/revoke$/);
+    if(revoke&&method==="POST"){
+      const d=await env.DB.prepare("SELECT id,user_id,revoked_at FROM devices WHERE id=? AND firm_id=?").bind(revoke[1],user.firm_id).first();
+      if(!d)return fail("Device not found",404);
+      if(user.role!=="principal"&&d.user_id!==user.id)return fail("Insufficient permission",403);
+      if(d.revoked_at)return fail("Device already revoked",409);
+      await env.DB.batch([
+       env.DB.prepare("UPDATE devices SET revoked_at=? WHERE id=? AND firm_id=?").bind(iso(),d.id,user.firm_id),
+       env.DB.prepare("DELETE FROM sessions WHERE device_id=?").bind(d.id),
+       await audit(env.DB,user,"revoked","device",d.id,{user_id:d.user_id})
+      ]);
+      return output({ok:true});
+    }
     if(path==="/api/clients"&&method==="POST") return handleCreateClient(await bodyJSON(request),env,user);
     if(/^\/api\/clients\/[a-f0-9-]+(?:\/(?:profile|contacts|gstins|archive))?$/.test(path))
       return handleClientMaster(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
