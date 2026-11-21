@@ -34,10 +34,23 @@ export async function handleFiles(request,env,user,deps){
   const mime=(request.headers.get("Content-Type")||"").split(";")[0].trim().toLowerCase();
   const filename=headerName(request.headers.get("X-File-Name")||"");
   if(!TYPES[mime]||!filename||!TYPES[mime].test(filename))return fail("Upload a permitted PDF, JPEG, PNG, CSV or XLSX file",400);
-  const advertised=Number(request.headers.get("Content-Length"));
-  if(!Number.isFinite(advertised)||advertised<1||advertised>MAX_BYTES)return fail("File must be between 1 byte and 15 MB",413);
-  const bytes=await request.arrayBuffer();
-  if(bytes.byteLength<1||bytes.byteLength>MAX_BYTES)return fail("Upload size out of range",413);
+  const length=request.headers.get("Content-Length");
+  if(length!==null&&Number(length)>MAX_BYTES)return fail("File must be 15 MB or smaller",413);
+  const reader=request.body?.getReader();
+  if(!reader)return fail("Empty upload",400);
+  let total=0;
+  const chunks=[];
+  while(true){
+   const {done,value}=await reader.read();
+   if(done)break;
+   total+=value.byteLength;
+   if(total>MAX_BYTES){await reader.cancel();return fail("File exceeds the 15 MB limit",413)}
+   chunks.push(value);
+  }
+  if(total<1)return fail("Empty upload",400);
+  const bytes=new Uint8Array(total);
+  let offset=0;
+  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength}
   const sha256=hex(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)));
   const fileId=id(),at=iso(),key=user.firm_id+"/"+req.id+"/"+fileId;
   await env.FILES.put(key,bytes,{httpMetadata:{contentType:"application/octet-stream"},customMetadata:{sha256}});
