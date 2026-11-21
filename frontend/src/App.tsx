@@ -3,17 +3,18 @@ import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarD
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
 import ErpDesk from "./ErpDesk";
+import DataTracker from "./Tracker";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
 import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, StatusBadge, type Column } from "./components";
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
 
 const navItems:{id:View;label:string;icon:typeof Home}[]=[
  {id:"desk",label:"Desk",icon:Home},{id:"work",label:"Work Register",icon:ClipboardList},{id:"clients",label:"Clients",icon:Users},
- {id:"documents",label:"Documents",icon:FolderOpen},{id:"compliance",label:"Compliance",icon:CalendarDays},
+ {id:"documents",label:"Documents",icon:FolderOpen},{id:"tracker",label:"Data Tracker",icon:FolderOpen},{id:"compliance",label:"Compliance",icon:CalendarDays},
  {id:"team",label:"Team",icon:BriefcaseBusiness},{id:"reports",label:"Reports",icon:ChartColumn},
  {id:"activity",label:"Activity & Sync",icon:ActivityIcon},{id:"settings",label:"Settings",icon:Settings}
 ];
-type ModalKind="client"|"task"|"document"|"staff"|"template"|"enrollment";
+type ModalKind="client"|"task"|"document"|"staff"|"template"|"enrollment"|"requirement"|"override";
 const taskStatuses:TaskStatus[]=["todo","in_progress","waiting","blocked","review","done"];
 const docStatuses:DocumentStatus[]=["missing","requested","received","verified","rejected","not_applicable"];
 function formatDate(input?:string|null){if(!input)return "—";const date=new Date(input.length===10?input+"T12:00:00":input);return Number.isNaN(date.getTime())?input:date.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});}
@@ -42,7 +43,7 @@ function Authentication({needsSetup,onSubmit,error,busy,onPreview}:{needsSetup:b
  </div></div>;
 }
 function RecordForm({kind,workspace,onCancel,onSave,busy,error}:{kind:ModalKind;workspace:Workspace;onCancel:()=>void;onSave:(kind:ModalKind,values:Record<string,string>)=>Promise<void>;busy:boolean;error:string}){
- const titles:Record<ModalKind,string>={client:"New client",task:"New assignment",document:"New document requirement",staff:"Add firm member",template:"New recurring service template",enrollment:"Enroll client in recurring service"};
+ const titles:Record<ModalKind,string>={client:"New client",task:"New assignment",document:"New document requirement",staff:"Add firm member",template:"New recurring service template",enrollment:"Enroll client in recurring service",requirement:"New reusable document checklist item",override:"Deadline override"};
  const clients:[string,string][]=workspace.clients.map(c=>[c.id,c.name]);
  const people:[string,string][]=workspace.staff.map(m=>[m.id,m.name]);
  const jobs:[string,string][]=workspace.tasks.map(t=>[t.id,(workspace.clients.find(c=>c.id===t.client_id)?.name??"Client")+" · "+t.title]);
@@ -54,8 +55,10 @@ function RecordForm({kind,workspace,onCancel,onSave,busy,error}:{kind:ModalKind;
   case "task":body=<><Select label="Client" name="client_id" items={clients}/><Input label="Work title" name="title" required/><Input label="Service (GST / TDS / Audit)" name="service" required/><Input label="Work period" name="period"/><Input label="Due date" name="due_date" type="date"/><Select label="Assignee" name="assignee_id" items={people} required={false}/><Select label="Priority" name="priority" items={[["medium","Medium"],["high","High"],["low","Low"]]}/><div className="field full"><label>Notes</label><textarea name="notes" maxLength={2000}/></div></>;break;
   case "document":body=<><Select label="Related assignment" name="task_id" items={jobs}/><Input label="Required document" name="name" required/><p className="hint">Document requirements start in Missing state until requested or received.</p></>;break;
   case "staff":body=<><Input label="Full name" name="name" required/><Input label="Work email" name="email" type="email" required/><Select label="Role" name="role" items={[["staff","Article / staff"],["manager","Manager"]]}/><Input label="Initial password (12+ characters)" name="password" type="password" required min="12"/></>;break;
-  case "template":body=<><Input label="Template name" name="name" required/><Input label="Service" name="service" required/><Select label="Frequency" name="frequency" items={[["monthly","Monthly"],["quarterly","Quarterly"],["annual","Annual"]]}/><Input label="Planning due day (1–28)" name="due_day" type="number" required min="1" max="28" defaultValue="15"/><p className="hint">An internal planning date—not an official filing deadline.</p></>;break;
+  case "template":body=<><Input label="Template name" name="name" required/><Input label="Service" name="service" required/><Select label="Frequency" name="frequency" items={[["monthly","Monthly"],["quarterly","Quarterly"],["annual","Annual"]]}/><Input label="Planning due day (1–28)" name="due_day" type="number" required min="1" max="28" defaultValue="15"/><Input label="Ask-by lead days" name="ask_by_lead_days" type="number" min="0" max="90" defaultValue="10"/><p className="hint">Planning dates are firm-configured, not verified statutory deadlines.</p></>;break;
   case "enrollment":body=<><Select label="Client" name="client_id" items={clients}/><Select label="Recurring template" name="template_id" items={templates}/><Select label="Default assignee" name="assignee_id" items={people} required={false}/></>;break;
+  case "requirement":body=<><Select label="Service template" name="template_id" items={templates}/><Input label="Required document or information" name="name" required/><Input label="Sort order" name="sort_order" type="number" min="0" defaultValue="0"/><p className="hint">This requirement is added to all open generated tasks for the template and every future task.</p></>;break;
+  case "override":body=<><Select label="Service template" name="template_id" items={templates}/><Input label="Work period (YYYY-MM, YYYY-Q1, or YYYY)" name="period" required/><Input label="New due date" name="new_due_date" type="date" required/><Input label="Source / notification reference" name="source_reference" required/><p className="hint">Manual override with an auditable source. Confirm the date before saving.</p></>;break;
  }
  return <Dialog title={titles[kind]} onClose={onCancel}>{error&&<div className="alert" role="alert">{error}</div>}<form onSubmit={submit}><div className="fields">{body}</div><div className="form-actions"><Button onClick={onCancel}>Cancel</Button><Button type="submit" kind="primary" disabled={busy}>{busy?"Saving…":"Save record"}</Button></div></form></Dialog>;
 }
@@ -105,7 +108,7 @@ export default function App(){
    if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
    if(e.altKey&&e.key.toLowerCase()==="n"){e.preventDefault();if(!preview&&privileged)setModal("task");return}
    if(e.altKey&&e.key.toLowerCase()==="c"){e.preventDefault();if(!preview&&privileged)setModal("client");return}
-   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance"};
+   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance",F8:"tracker"};
    if(pages[e.key]){e.preventDefault();navigate(pages[e.key])}
   };
   document.addEventListener("keydown",handler);return()=>document.removeEventListener("keydown",handler);
@@ -123,7 +126,7 @@ export default function App(){
   }catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy(false)}
  };
  const create=async(kind:ModalKind,values:Record<string,string>)=>{
-  const path:{[K in ModalKind]:"clients"|"tasks"|"documents"|"staff"|"templates"|"enrollments"}={client:"clients",task:"tasks",document:"documents",staff:"staff",template:"templates",enrollment:"enrollments"};
+  const path:{[K in ModalKind]:"clients"|"tasks"|"documents"|"staff"|"templates"|"enrollments"|"requirements"|"overrides"}={client:"clients",task:"tasks",document:"documents",staff:"staff",template:"templates",enrollment:"enrollments",requirement:"requirements",override:"overrides"};
   await mutate(()=>createRecord(path[kind],values));
  };
  const changeTask=(t:Task,status:TaskStatus)=>void mutate(()=>patchTask(t.id,status),"Assignment updated.");
@@ -131,7 +134,7 @@ export default function App(){
  const download=(kind:"clients"|"tasks"|"documents")=>{if(preview){flash("Exports are disabled in sample mode.");return}window.location.assign(exportUrl(kind))};
  const open=(kind:ModalKind)=>{if(preview){flash("Read-only preview: sign in to create real records.");return}setError("");setModal(kind)};
  const taskDetails=(t:Task)=> <div className="detail-card"><div className="detail-head"><div><p className="hint">ASSIGNMENT DETAILS</p><h2>{t.title}</h2><p className="muted small">{clientName(t.client_id)} · {t.service} · {t.period??"No period"}</p></div><button aria-label="Close" className="close-button" onClick={()=>setSelected(null)}><X size={18}/></button></div>
-  <div className="detail-kv"><div><label>Assignee</label><span>{memberName(t.assignee_id)}</span></div><div><label>Due date</label><span>{formatDate(t.due_date)}</span></div><div><label>Reviewer</label><span>{memberName(t.reviewer_id)}</span></div><div><label>Priority</label><StatusBadge status={t.priority}/></div></div>
+  <div className="detail-kv"><div><label>Assignee</label><span>{memberName(t.assignee_id)}</span></div><div><label>Due date</label><span>{formatDate(t.due_date)}</span></div><div><label>Ask by</label><span>{formatDate(t.ask_by_date)}</span></div><div><label>Reviewer</label><span>{memberName(t.reviewer_id)}</span></div><div><label>Priority</label><StatusBadge status={t.priority}/></div></div>
   <div className="field" style={{marginTop:20}}><label htmlFor="task-status">Update status</label><select id="task-status" value={t.status} disabled={busy||preview||(!privileged&&t.status==="done")} onChange={e=>changeTask(t,e.target.value as TaskStatus)}>{taskStatuses.filter(st=>privileged||st!=="done").map(st=><option key={st} value={st}>{statusLabel(st)}</option>)}</select></div>
   <div className="detail-tabs"><span>Required documents</span></div>{workspace?.documents.filter(d=>d.task_id===t.id).map(d=><div className="detail-mini" key={d.id}><strong>{d.name}</strong> <StatusBadge status={d.status}/></div>)}
   {workspace?.documents.filter(d=>d.task_id===t.id).length===0&&<p className="muted small">No document requirements.</p>}
@@ -236,9 +239,10 @@ export default function App(){
  function showCompliance(){
   const dates=workspace!.tasks.filter(t=>t.due_date&&t.status!=="done").slice().sort((a,b)=>(a.due_date??"").localeCompare(b.due_date??""));
   const columns:Column<Task>[]=[taskCols[0],taskCols[1],taskCols[3],taskCols[4]];
-  return <>{previewBanner()}<Heading title="Compliance Calendar" subtitle="Recurring work templates and firm-planned due dates" actions={<>{privileged&&<><Button kind="primary" onClick={()=>open("template")}><Plus size={16}/> New template</Button><Button onClick={()=>open("enrollment")}>Enroll client</Button></>}</>}/>
+  return <>{previewBanner()}<Heading title="Compliance Calendar" subtitle="Recurring work templates and firm-planned due dates" actions={<>{privileged&&<><Button kind="primary" onClick={()=>open("template")}><Plus size={16}/> New template</Button><Button onClick={()=>open("enrollment")}>Enroll client</Button><Button onClick={()=>open("requirement")}>Add requirement</Button><Button onClick={()=>open("override")}>Override date</Button></>}</>}/>
    <div className="notice" style={{marginBottom:17}}>Due days here are internal planning dates, not legally verified filing deadlines. Confirm statutory dates against the official rules.</div>
-   <div className="split-grid"><Panel title="Recurring service templates">{workspace!.templates.length===0?<Empty title="No recurring templates"/>:workspace!.templates.map(t=><div className="stats-line" key={t.id}><div className="grow"><strong className="small">{t.name}</strong><p className="hint">{t.service} · {t.frequency} · planning day {t.due_day}</p></div><span className="badge-number">{workspace!.enrollments.filter((e:Enrollment)=>e.template_id===t.id&&e.active).length} clients</span></div>)}
+   <div className="split-grid"><Panel title="Recurring service templates">{workspace!.templates.length===0?<Empty title="No recurring templates"/>:workspace!.templates.map(t=><div className="stats-line" key={t.id}><div className="grow"><strong className="small">{t.name}</strong><p className="hint">{t.service} · {t.frequency} · planning day {t.due_day}</p></div><span className="badge-number">{workspace!.enrollments.filter((e:Enrollment)=>e.template_id===t.id&&e.active).length} clients</span>
+      <div className="muted small" style={{width:"100%"}}>Ask by {t.ask_by_lead_days??10} days early · {(workspace!.requirements??[]).filter(r=>r.template_id===t.id&&r.required).map(r=>r.name).join(", ")||"No requirements configured"}</div></div>)}
     {privileged&&<div className="toolbar" style={{marginTop:15}}><label htmlFor="period">Generate work for period</label><input id="period" type="month" className="control" value={period} onChange={e=>setPeriod(e.target.value)}/><Button disabled={busy||preview} onClick={()=>void mutate(async()=>{const r=await generatePeriod(period);flash(r.created+" assignments created; "+r.already+" already existed.")},"Work generated.")}>Generate assignments</Button></div>}</Panel>
     <section><Panel title="Upcoming deadlines"><p className="muted small">Firm-set due dates and reporting periods</p></Panel><Register columns={columns} rows={dates} empty="No scheduled work"/></section>
    </div>
@@ -285,12 +289,12 @@ export default function App(){
   </div></>}
  function showSettings(){return <>{previewBanner()}<Heading title="Settings" subtitle="Firm account and integration settings"/><Panel title="Firm account"><div className="detail-kv"><div><label>Firm</label><span>{workspace!.firm.name}</span></div><div><label>User</label><span>{workspace!.user.name}</span></div><div><label>Role</label><span>{workspace!.user.role}</span></div><div><label>Email</label><span>{workspace!.user.email}</span></div></div><div style={{marginTop:20}}><Button onClick={()=>{if(preview){window.location.assign("/");return}void logout().then(()=>{setWorkspace(null);setSession({authenticated:false,needs_setup:false,user:null})}).catch(e=>setError(String(e)))}}><LogOut size={15}/> {preview?"Exit preview":"Sign out"}</Button></div></Panel></>}
  let page:ReactNode=null;
- if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "clients":page=showClients();break;case "documents":page=showDocuments();break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
+ if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "clients":page=showClients();break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  if(!session.authenticated||!workspace)return <Authentication needsSetup={session.needs_setup} onSubmit={handleAuth} error={error} busy={busy} onPreview={enterPreview}/>;
  const groups:{name:string;items:View[]}[]=[
   {name:"MASTERS",items:["clients","team"]},
-  {name:"TRANSACTIONS",items:["work","documents"]},
+  {name:"TRANSACTIONS",items:["work","documents","tracker"]},
   {name:"REPORTS",items:["compliance","reports","activity"]},
   {name:"UTILITIES",items:["settings"]}
  ];
@@ -302,6 +306,7 @@ export default function App(){
   {key:"F5",label:"Work Register",onSelect:()=>navigate("work")},
   {key:"F6",label:"Document Register",onSelect:()=>navigate("documents")},
   {key:"F7",label:"Compliance",onSelect:()=>navigate("compliance")},
+   {key:"F8",label:"Data Tracker",onSelect:()=>navigate("tracker")},
   {key:"Alt+N",label:"New Assignment",onSelect:()=>open("task"),disabled:preview||!privileged},
   {key:"Alt+C",label:"New Client",onSelect:()=>open("client"),disabled:preview||!privileged},
   {key:"Ctrl+K",label:"Go To / Search",onSelect:()=>setCommandOpen(true)}
