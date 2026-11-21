@@ -20,7 +20,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "lucide-react": "^0.468.0",
-    "animejs": "^4.5.0"
+    "animejs": "^4.5.0",
+    "read-excel-file": "^9.3.12"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",
