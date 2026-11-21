@@ -199,6 +199,14 @@ async function handleCreateTask(data, env, user) {
   if (!client || !title || !service || !(await canReadClient(env.DB,user,clientId))) return fail("Valid accessible client, title and service required");
   const assignee=clean(data.assignee_id,80), reviewer=clean(data.reviewer_id,80);
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee)) || !(await validateFirmUser(env.DB,user.firm_id,reviewer))) return fail("Assignee or reviewer not found in firm");
+  if(user.role==="manager"){
+   for(const target of [assignee,reviewer]){
+    if(!target)continue;
+    const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+      .bind(user.firm_id,target,user.id,user.id).first();
+    if(!teammate)return fail("You may assign work only to your own team",403);
+   }
+  }
   const due=clean(data.due_date,10);
   if (due && !validCalendarDate(due)) return fail("Due date must be a valid YYYY-MM-DD calendar date");
   const taskId=id(), at=iso();
@@ -221,6 +229,11 @@ async function handleUpdateTask(taskId, data, env, user) {
   if (!status || !statusForRole(user.role,status)) return fail("Status not permitted");
   const assignee=isPrivileged(user) && data.assignee_id!==undefined?clean(data.assignee_id,80):previous.assignee_id;
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee))) return fail("Assignee not found in firm");
+  if(user.role==="manager"&&assignee){
+   const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+    .bind(user.firm_id,assignee,user.id,user.id).first();
+   if(!teammate)return fail("You may assign work only to your own team",403);
+  }
   const notes=data.notes===undefined?previous.notes:clean(data.notes,2000);
   const at=iso();
   const completed=status==="done"?(previous.completed_at||at):null;
@@ -302,7 +315,7 @@ function plannedDueDate(ym,frequency,day) {
   return date.toISOString().slice(0,10);
 }
 async function handleCreateTemplate(data,env,user){
-  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  if(user.role!=="principal")return fail("Only principal may change firm-wide compliance templates",403);
   const name=clean(data.name,120),service=clean(data.service,80),frequency=String(data.frequency||"");
   const day=Number(data.due_day);
   const lead=data.ask_by_lead_days===undefined?10:Number(data.ask_by_lead_days);
@@ -324,6 +337,11 @@ async function handleEnroll(data,env,user){
     validateFirmUser(env.DB,user.firm_id,assigneeId)
   ]);
   if(!clientRecord||!templateRecord||!validUser||!(await canReadClient(env.DB,user,clientId)))return fail("Invalid accessible client, template or assignee");
+  if(user.role==="manager"&&assigneeId){
+   const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+    .bind(user.firm_id,assigneeId,user.id,user.id).first();
+   if(!teammate)return fail("Enrollment assignee must belong to your own team",403);
+  }
   await env.DB.batch([
     env.DB.prepare("INSERT INTO service_enrollments(id,firm_id,client_id,template_id,assignee_id,active,created_at) VALUES (?,?,?,?,?,1,?) ON CONFLICT(firm_id,client_id,template_id) DO UPDATE SET assignee_id=excluded.assignee_id,active=1")
       .bind(id(),user.firm_id,clientId,templateId,assigneeId||null,iso()),
