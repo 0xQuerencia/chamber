@@ -269,13 +269,14 @@ async function handleUpdateDocument(docId,data,env,user) {
 async function handleCreateStaff(data,env,user) {
   if (user.role!=="principal") return fail("Only principals can add staff",403);
   const name=clean(data.name,100), email=clean(data.email,200).toLowerCase(), role=data.role==="manager"?"manager":"staff";
-  const password=String(data.password||"");
+  const password=String(data.password||""),managerId=clean(data.manager_id,100);
   if(!name||!validEmail(email)||password.length<12||password.length>128) return fail("Name, valid email and password (12–128 characters) required");
+  if(managerId&&!(await validClientManager(env.DB,user.firm_id,managerId)))return fail("Reporting manager must be a principal or manager in this firm");
   const pw=await passwordRecord(password), userId=id();
   try {
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO users(id,firm_id,name,email,role,salt,password_hash,active,created_at) VALUES (?,?,?,?,?,?,?,?,?)")
-        .bind(userId,user.firm_id,name,email,role,pw.salt,pw.password_hash,1,iso()),
+      env.DB.prepare("INSERT INTO users(id,firm_id,name,email,role,salt,password_hash,active,created_at,manager_id) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind(userId,user.firm_id,name,email,role,pw.salt,pw.password_hash,1,iso(),role==="manager"?null:managerId||null),
       await audit(env.DB,user,"created","user",userId,{role})
     ]);
   } catch(e) {if(String(e).includes("UNIQUE"))return fail("Email already used",409);throw e;}
