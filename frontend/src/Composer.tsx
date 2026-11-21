@@ -34,7 +34,6 @@ export default function Composer({workspace,preview:demo,onRefresh}:{workspace:W
  const chosenTemplate=templates.find(t=>t.id===templateId);
  const effectiveBody=chosenTemplate?.body??body;
  const selectedItems=preview?.previews??[];
- const eligible=selectedItems.filter(x=>x.eligible);
 
  useEffect(()=>{
   let active=true;
