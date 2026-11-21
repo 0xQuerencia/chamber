@@ -16,6 +16,7 @@ function clientName(workspace:Workspace,id:string){return workspace.clients.find
 function pending(doc:Requirement){return !["received","verified","not_applicable"].includes(doc.status);}
 function monthLabel(d:Date){return d.toLocaleDateString("en-IN",{month:"short",year:"2-digit"}).replace(" ","-");}
 function monthKey(d:Date){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+function periodKey(raw:string|null){if(!raw)return null;if(/^\d{4}-\d{2}$/.test(raw))return raw;const m=/^([A-Za-z]{3})\s+(\d{4})$/.exec(raw);if(!m)return null;const i=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(m[1].toLowerCase());return i<0?null:m[2]+"-"+String(i+1).padStart(2,"0");}
 function allPeriods(){const now=new Date();return Array.from({length:5},(_,i)=>new Date(now.getFullYear(),now.getMonth()-4+i,1));}
 
 export function TallyGateway({workspace,onNavigate,preview}:Props){
@@ -66,7 +67,7 @@ export function TallyDataGrid({workspace,onNavigate,onOpenRecord,preview}:GridPr
  const selected=clients[Math.max(0,Math.min(row,clients.length-1))];
  const selectedPeriod=months[col]&&monthKey(months[col]);
  const docsFor=(cid:string,period:string)=>{
-  const taskIDs=new Set(workspace.tasks.filter(t=>t.client_id===cid&&t.period===period).map(t=>t.id));
+  const taskIDs=new Set(workspace.tasks.filter(t=>t.client_id===cid&&periodKey(t.period)===period).map(t=>t.id));
   return workspace.documents.filter(d=>d.client_id===cid&&taskIDs.has(d.task_id));
  };
  function cell(cid:string,month:string){
@@ -95,7 +96,7 @@ export function TallyDataGrid({workspace,onNavigate,onOpenRecord,preview}:GridPr
    <div className="tp-report-layout">
     <div className="tp-sheet tp-report-grid"><table><thead><tr><th>Particulars</th>{months.map(m=><th key={monthKey(m)} className="tp-num">{monthLabel(m)}</th>)}<th className="tp-num">Pending</th></tr></thead><tbody>
      {clients.map((c,ri)=><tr key={c.id}><td className={ri===row?"tp-selected":""}><button className="tp-cell-button" onClick={()=>setRow(ri)}>{c.name}</button></td>{months.map((m,mi)=><td key={monthKey(m)} className={"tp-num "+(ri===row&&mi===col?"tp-selected":"")}><button className="tp-cell-button" onClick={()=>{setRow(ri);setCol(mi)}} onDoubleClick={()=>onOpenRecord("tracker")}>{cell(c.id,monthKey(m))}</button></td>)}<td className="tp-num">{workspace.documents.filter(d=>d.client_id===c.id&&pending(d)).length}</td></tr>)}
-     <tr className="tp-total"><td>Total pending items</td>{months.map(m=><td key={monthKey(m)} className="tp-num">{workspace.documents.filter(d=>workspace.tasks.some(t=>t.id===d.task_id&&t.period===monthKey(m))&&pending(d)).length}</td>)}<td className="tp-num">{workspace.documents.filter(pending).length}</td></tr>
+     <tr className="tp-total"><td>Total pending items</td>{months.map(m=><td key={monthKey(m)} className="tp-num">{workspace.documents.filter(d=>workspace.tasks.some(t=>t.id===d.task_id&&periodKey(t.period)===monthKey(m))&&pending(d)).length}</td>)}<td className="tp-num">{workspace.documents.filter(pending).length}</td></tr>
      </tbody></table>
      {clients.length===0&&<p className="tp-empty">No clients match this filter.</p>}
     </div>
