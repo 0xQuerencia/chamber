@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, Check, ClipboardList, Copy, Mail, MessageCircle, RefreshCw, Send, X } from "lucide-react";
+import { ClipboardList, Copy, Mail, MessageCircle, RefreshCw, Send, X } from "lucide-react";
 import { cancelMessageBatch, createMessageTemplate, draftBulkMessages, getMessageBatch, getMessageBatches, getMessageTemplates, previewBulkMessages } from "./api";
 import type { MessageBatch, MessageBatchDetail, MessageChannel, MessagePreview, MessageTemplate, Workspace } from "./types";
 
