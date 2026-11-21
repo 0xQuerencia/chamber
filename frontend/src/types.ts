@@ -2,7 +2,7 @@ export type Role="principal"|"manager"|"staff";
 export type Priority="low"|"medium"|"high";
 export type TaskStatus="todo"|"in_progress"|"waiting"|"blocked"|"review"|"done";
 export type DocumentStatus="missing"|"requested"|"received"|"verified"|"rejected"|"not_applicable";
-export type View="desk"|"work"|"clients"|"documents"|"compliance"|"team"|"reports"|"activity"|"settings";
+export type View="desk"|"work"|"clients"|"documents"|"tracker"|"compliance"|"team"|"reports"|"activity"|"settings";
 export type WorkFilter="all"|"mine"|"overdue"|TaskStatus;
 export interface Member {id:string;name:string;email:string;role:Role;active?:number}
 export interface Client {id:string;name:string;category:string;email:string|null;phone:string|null;pan:string|null;gstin:string|null;notes?:string|null;created_at:string}
@@ -11,6 +11,15 @@ export interface Requirement {id:string;task_id:string;client_id:string;name:str
 export interface Activity {id:string;actor_name?:string|null;event:string;entity_type:string;entity_id:string;at:string}
 export interface Template {id:string;name:string;service:string;frequency:"monthly"|"quarterly"|"annual";due_day:number;active:number}
 export interface Enrollment {id:string;client_id:string;template_id:string;assignee_id?:string|null;active:number}
-export interface Workspace {firm:{id:string;name:string};user:Member;staff:Member[];clients:Client[];tasks:Task[];documents:Requirement[];activity:Activity[];templates:Template[];enrollments:Enrollment[]}
+export interface Workspace {firm:{id:string;name:string};user:Member;staff:Member[];clients:Client[];tasks:Task[];documents:Requirement[];activity:Activity[];templates:Template[];enrollments:Enrollment[];requirements?:RequirementTemplate[]}
 export interface Session {authenticated:boolean;needs_setup:boolean;user:Pick<Member,"id"|"name"|"role">|null}
 export interface GenerationResult {created:number;already:number;checked:number}
+
+export interface RequirementTemplate {id:string;template_id:string;name:string;required:number;sort_order:number}
+export type DataCellState="complete"|"partial"|"missing"|"not_due"|"unconfigured";
+export interface TrackerCell {period:string;state:DataCellState;tasks:number;total:number;received:number;waived:number}
+export interface TrackerClient {id:string;name:string;category:string;cells:TrackerCell[]}
+export interface TrackerSummary {periods:string[];clients:TrackerClient[];page:number;has_more:boolean;service:string|null}
+export interface TrackerDocument {id:string;task_id:string;name:string;status:DocumentStatus;requested_at:string|null;received_at:string|null;verified_at:string|null;received_via:string|null;receipt_note:string|null}
+export interface TrackerTask {id:string;title:string;service:string;status:TaskStatus;due_date:string|null;ask_by_date:string|null}
+export interface TrackerDetail {client:{id:string;name:string};period:string;tasks:TrackerTask[];documents:TrackerDocument[]}

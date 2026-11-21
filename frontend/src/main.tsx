@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./styles.css";
 import "./classic-erp.css";
+import "./tracker.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
