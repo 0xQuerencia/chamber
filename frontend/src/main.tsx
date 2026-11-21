@@ -27,6 +27,7 @@ import "./blueprint-tokens.css";
 import "./delivery.css";
 import "./portal.css";
 import "./compliance.css";
+import "./tally-layout.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
