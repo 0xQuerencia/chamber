@@ -29,3 +29,7 @@ CREATE TABLE IF NOT EXISTS import_errors (
  created_at TEXT NOT NULL,
  UNIQUE(batch_id,source_index)
 );
+
+-- An archived client no longer occupies its former code in the active master.
+DROP INDEX IF EXISTS clients_firm_code_unique;
+CREATE UNIQUE INDEX clients_firm_code_unique ON clients(firm_id,code) WHERE code IS NOT NULL AND archived_at IS NULL;
