@@ -5,12 +5,13 @@ import { sampleWorkspace } from "./demo";
 import ErpDesk from "./ErpDesk";
 import DataTracker from "./Tracker";
 import ClientProfile from "./ClientProfile";
+import WorkBoard from "./WorkBoard";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
 import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, StatusBadge, type Column } from "./components";
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
 
 const navItems:{id:View;label:string;icon:typeof Home}[]=[
- {id:"desk",label:"Desk",icon:Home},{id:"work",label:"Work Register",icon:ClipboardList},{id:"clients",label:"Clients",icon:Users},
+ {id:"desk",label:"Desk",icon:Home},{id:"work",label:"Work Register",icon:ClipboardList},{id:"board",label:"Work Board",icon:ClipboardList},{id:"myday",label:"My Day",icon:ClipboardList},{id:"clients",label:"Clients",icon:Users},
  {id:"documents",label:"Documents",icon:FolderOpen},{id:"tracker",label:"Data Tracker",icon:FolderOpen},{id:"compliance",label:"Compliance",icon:CalendarDays},
  {id:"team",label:"Team",icon:BriefcaseBusiness},{id:"reports",label:"Reports",icon:ChartColumn},
  {id:"activity",label:"Activity & Sync",icon:ActivityIcon},{id:"settings",label:"Settings",icon:Settings}
@@ -109,7 +110,7 @@ export default function App(){
    if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
    if(e.altKey&&e.key.toLowerCase()==="n"){e.preventDefault();if(!preview&&privileged)setModal("task");return}
    if(e.altKey&&e.key.toLowerCase()==="c"){e.preventDefault();if(!preview&&privileged)setModal("client");return}
-   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance",F8:"tracker"};
+   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance",F8:"tracker",F9:"board"};
    if(pages[e.key]){e.preventDefault();navigate(pages[e.key])}
   };
   document.addEventListener("keydown",handler);return()=>document.removeEventListener("keydown",handler);
@@ -293,12 +294,12 @@ export default function App(){
   </div></>}
  function showSettings(){return <>{previewBanner()}<Heading title="Settings" subtitle="Firm account and integration settings"/><Panel title="Firm account"><div className="detail-kv"><div><label>Firm</label><span>{workspace!.firm.name}</span></div><div><label>User</label><span>{workspace!.user.name}</span></div><div><label>Role</label><span>{workspace!.user.role}</span></div><div><label>Email</label><span>{workspace!.user.email}</span></div></div><div style={{marginTop:20}}><Button onClick={()=>{if(preview){window.location.assign("/");return}void logout().then(()=>{setWorkspace(null);setSession({authenticated:false,needs_setup:false,user:null})}).catch(e=>setError(String(e)))}}><LogOut size={15}/> {preview?"Exit preview":"Sign out"}</Button></div></Panel></>}
  let page:ReactNode=null;
- if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "clients":page=showClients();break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
+ if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  if(!session.authenticated||!workspace)return <Authentication needsSetup={session.needs_setup} onSubmit={handleAuth} error={error} busy={busy} onPreview={enterPreview}/>;
  const groups:{name:string;items:View[]}[]=[
   {name:"MASTERS",items:["clients","team"]},
-  {name:"TRANSACTIONS",items:["work","documents","tracker"]},
+  {name:"TRANSACTIONS",items:["work","board","myday","documents","tracker"]},
   {name:"REPORTS",items:["compliance","reports","activity"]},
   {name:"UTILITIES",items:["settings"]}
  ];
@@ -311,6 +312,7 @@ export default function App(){
   {key:"F6",label:"Document Register",onSelect:()=>navigate("documents")},
   {key:"F7",label:"Compliance",onSelect:()=>navigate("compliance")},
    {key:"F8",label:"Data Tracker",onSelect:()=>navigate("tracker")},
+   {key:"F9",label:"Work Board",onSelect:()=>navigate("board")},
   {key:"Alt+N",label:"New Assignment",onSelect:()=>open("task"),disabled:preview||!privileged},
   {key:"Alt+C",label:"New Client",onSelect:()=>open("client"),disabled:preview||!privileged},
   {key:"Ctrl+K",label:"Go To / Search",onSelect:()=>setCommandOpen(true)}
