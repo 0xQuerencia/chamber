@@ -1,4 +1,5 @@
 -- Explicit, cancellable outbound sends with a durable retry ledger.
+ALTER TABLE message_templates ADD COLUMN language_code TEXT NOT NULL DEFAULT 'en_US';
 ALTER TABLE message_batches ADD COLUMN template_id TEXT REFERENCES message_templates(id);
 ALTER TABLE message_batches ADD COLUMN queued_by TEXT REFERENCES users(id);
 ALTER TABLE message_batches ADD COLUMN queued_at TEXT;
