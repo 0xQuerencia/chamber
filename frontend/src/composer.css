@@ -1,0 +1,59 @@
+/* Recipient-focused bulk request composer in Chamber's classic ERP theme. */
+.composer-screen{min-width:0;color:#192e43}
+.composer-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.composer-heading h1{font-size:23px;margin:0}.composer-heading p{font-size:12px;color:#62768b;margin:5px 0 0}
+.composer-heading-count{padding:8px 12px;border:1px solid #d1dde7;background:#f5f8fa;font-size:12px;white-space:nowrap}
+.composer-heading-count strong{font-size:17px;color:#1f5c80}
+.composer-disclaimer{display:flex;gap:10px;align-items:flex-start;background:#eef4f8;border:1px solid #d3dfe9;padding:10px 12px;color:#3e5b70;margin-bottom:12px}
+.composer-disclaimer svg{flex-shrink:0}.composer-disclaimer p{font-size:12px;line-height:1.5;margin:0}
+.composer-layout{display:grid;grid-template-columns:minmax(310px,.9fr) minmax(380px,1.1fr);gap:12px;align-items:start}
+.composer-controls,.composer-results{display:grid;gap:12px;min-width:0}
+.composer-panel{background:white;border:1px solid #d8e3eb;padding:14px;min-width:0}
+.composer-panel h2{font-size:14px;margin:0 0 11px;color:#193b56}.composer-panel h2 span{font-size:11px;font-weight:400;color:#647e91}
+.composer-client-filters{display:flex;gap:7px;margin-bottom:8px}.composer-client-filters input{flex:1;min-width:0}
+.composer-client-filters input,.composer-form-grid input,.composer-form-grid select,.composer-field select,.composer-save-template input{border:1px solid #c9d5df;background:white;padding:7px 9px;color:#233f57;border-radius:3px;min-height:34px;font-size:12px}
+.composer-client-filters button,.composer-save-template button{border:1px solid #bfcedb;background:#f7fafc;color:#265276;border-radius:3px;padding:6px 9px;cursor:pointer;font-size:11px;white-space:nowrap}
+.composer-client-filters button:disabled{opacity:.5}
+.composer-clients{max-height:270px;overflow:auto;border:1px solid #e3eaf0}
+.composer-clients label{display:flex;align-items:center;gap:9px;padding:8px 10px;border-bottom:1px solid #edf1f5;cursor:pointer}
+.composer-clients label:last-child{border-bottom:0}.composer-clients label:hover{background:#f7fafd}
+.composer-clients input{accent-color:#246c59;min-width:15px;height:15px}
+.composer-clients strong{display:block;font-size:12px}.composer-clients small{display:block;color:#75899d;font-size:10px;margin-top:3px}
+.composer-muted{font-size:11px;color:#6a7e90;line-height:1.55;margin:7px 0}
+.composer-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.composer-form-grid label,.composer-field{display:grid;gap:5px;font-size:11px;font-weight:600;color:#425e72}
+.composer-form-grid input,.composer-form-grid select{width:100%}
+.composer-field{margin-bottom:11px}
+.composer-field select{min-width:0}
+.composer-field textarea{border:1px solid #c9d5df;background:#fff;color:#1d384f;font-size:12px;line-height:1.5;padding:9px;border-radius:3px;resize:vertical;font-family:inherit}
+.composer-field input:focus-visible,.composer-field textarea:focus-visible,.composer-form-grid select:focus-visible,.composer-form-grid input:focus-visible,.composer-client-filters input:focus-visible{outline:2px solid #3274a8}
+.composer-text-link{background:none;border:0;color:#246494;text-decoration:underline;cursor:pointer;font-size:11px;margin-bottom:10px;padding:0}
+.composer-save-template{display:flex;gap:6px;margin-bottom:10px}
+.composer-save-template input{flex:1;min-width:0}
+.composer-review-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.composer-review-head h2{margin:0}.composer-review-head>span{font-size:11px;color:#526f83}
+.composer-review-head>button{border:1px solid #d4e0e8;background:#fff;cursor:pointer;color:#4c728e;padding:5px}
+.composer-preview-list{max-height:225px;overflow:auto;border:1px solid #e1eaf1;margin:10px 0}
+.composer-preview-list button{width:100%;border:0;border-bottom:1px solid #e7edf2;background:#fff;text-align:left;padding:9px 10px;display:grid;grid-template-columns:minmax(0,1fr) 55px;gap:3px 8px;cursor:pointer}
+.composer-preview-list button.active{background:#edf5fb;box-shadow:inset 3px 0 #2e6da2}
+.composer-preview-list button>span{font-size:12px;font-weight:600;grid-column:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.composer-preview-list button>small{font-size:10px;color:#718395;grid-column:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.composer-preview-list button>strong{font-size:10px;text-align:right;grid-column:2;grid-row:1 / span 2;color:#336d54}
+.composer-rendered{background:#f6f9fb;border:1px solid #dee8f0;padding:12px;margin:10px 0}
+.composer-rendered h3{font-size:12px;margin:0}.composer-rendered p{font-size:11px;color:#687b8d;margin:5px 0}
+.composer-rendered pre,.composer-draft pre{font-family:inherit;font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;margin:9px 0;color:#2d4658}
+.composer-draft{border:1px solid #dfe7ee;padding:11px;margin:8px 0}
+.composer-draft>div:first-child strong{font-size:12px;display:block}
+.composer-draft>div:first-child small{font-size:10px;color:#657c90;display:block;margin-top:3px}
+.composer-draft pre{background:#f6f8fb;padding:10px;border-left:2px solid #c8d9e8}
+.composer-draft-actions{display:flex;gap:6px;flex-wrap:wrap}
+.composer-draft-actions button,.composer-draft-actions a,.composer-cancel{border:1px solid #c7d5df;border-radius:3px;padding:7px 9px;background:#fff;color:#2b5c7e;font-size:11px;display:inline-flex;align-items:center;gap:5px;text-decoration:none;cursor:pointer}
+.composer-cancel{color:#993b32;margin-top:10px}
+.composer-placeholder{text-align:center;padding:37px 20px;color:#60798e}
+.composer-placeholder svg{margin:0 auto 12px}
+.composer-placeholder h2{margin:0 0 8px}.composer-placeholder p{font-size:12px;line-height:1.5;max-width:330px;margin:0 auto}
+.composer-past{display:flex;justify-content:space-between;width:100%;border:0;border-bottom:1px solid #e7ecf2;background:#fff;padding:9px 3px;cursor:pointer;font-size:11px;color:#264c68}
+.composer-past small{color:#6f8094}
+.composer-panel .tracker-btn.primary{margin-top:10px;width:100%}
+@media(max-width:1250px){.composer-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:650px){.composer-heading{flex-direction:column;align-items:flex-start}.composer-form-grid{grid-template-columns:minmax(0,1fr)}}
