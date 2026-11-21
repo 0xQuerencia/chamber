@@ -14,6 +14,8 @@ import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./c
 import {clientScope,canReadClient,validClientManager} from "./permissions.js";
 import {handleSecurity} from "./security.js";
 import {handleOnboarding} from "./onboarding.js";
+import {handleDelivery,drainDeliveryQueue} from "./delivery.js";
+import {handleWhatsAppWebhook} from "./delivery-webhooks.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
@@ -484,6 +486,7 @@ async function api(request,env) {
     if(path==="/api/files"||path.startsWith("/api/files/"))return handleFiles(request,env,user,{output,fail,clean,audit,id,iso});
     if(path.startsWith("/api/sheets/"))return handleSheetSettings(request,env,user,{output,fail,clean,audit,id,iso,bodyJSON});
     if(path.startsWith("/api/reports/"))return handleReports(request,env,user,{output,fail,isPrivileged});
+    if(path.startsWith("/api/delivery/"))return handleDelivery(request,env,user,{output,fail,clean,audit,iso,bodyJSON});
     if(path.startsWith("/api/messages/"))
       return handleMessages(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
     if(path==="/api/reminders"||path.startsWith("/api/reminders/"))
@@ -510,7 +513,10 @@ export default {
   async scheduled(controller,env,ctx) {
     if(!env.DB)return;
     if(controller.cron==="*/1 * * * *"){
-      ctx.waitUntil(scheduledSheetSync(env).catch(error=>console.error("Chamber Sheets sync failed",error?.message)));
+      ctx.waitUntil(Promise.all([
+       scheduledSheetSync(env).catch(error=>console.error("Chamber Sheets sync failed",error?.message)),
+       drainDeliveryQueue(env).catch(error=>console.error("Chamber delivery queue failed",error?.message))
+      ]));
       return;
     }
     const now=new Date();
@@ -523,6 +529,7 @@ export default {
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
     if(path==="/api/file-scan/callback")return scanCallback(request,env);
+    if(path==="/api/webhooks/whatsapp")return handleWhatsAppWebhook(request,env);
     if(path.startsWith("/api/")){
       const response=await api(request,env);
       if(response.status===403&&env.DB){
