@@ -14,6 +14,7 @@ import KeyboardHelp from "./KeyboardHelp";
 import MfaAuth from "./MfaAuth";
 import SecurityLog from "./SecurityLog";
 import Onboarding from "./Onboarding";
+import ComplianceRules from "./ComplianceRules";
 import ClientPortal from "./ClientPortal";
 import {goShortcuts,isTextInteraction} from "./keyboard";
 import DeviceManager from "./DeviceManager";
@@ -299,6 +300,7 @@ export default function App(){
   const columns:Column<Task>[]=[taskCols[0],taskCols[1],taskCols[3],taskCols[4]];
   return <>{previewBanner()}<Heading title="Compliance Calendar" subtitle="Recurring work templates and firm-planned due dates" actions={<>{privileged&&<><Button kind="primary" onClick={()=>open("template")}><Plus size={16}/> New template</Button><Button onClick={()=>open("enrollment")}>Enroll client</Button><Button onClick={()=>open("requirement")}>Add requirement</Button><Button onClick={()=>open("override")}>Override date</Button></>}</>}/>
    <div className="notice" style={{marginBottom:17}}>Due days here are internal planning dates, not legally verified filing deadlines. Confirm statutory dates against the official rules.</div>
+   <ComplianceRules principal={Boolean(principal)} preview={preview}/>
    <div className="split-grid"><Panel title="Recurring service templates">{workspace!.templates.length===0?<Empty title="No recurring templates"/>:workspace!.templates.map(t=><div className="stats-line" key={t.id}><div className="grow"><strong className="small">{t.name}</strong><p className="hint">{t.service} · {t.frequency} · planning day {t.due_day}</p></div><span className="badge-number">{workspace!.enrollments.filter((e:Enrollment)=>e.template_id===t.id&&e.active).length} clients</span>
       <div className="muted small" style={{width:"100%"}}>Ask by {t.ask_by_lead_days??10} days early · {(workspace!.requirements??[]).filter(r=>r.template_id===t.id&&r.required).map(r=>r.name).join(", ")||"No requirements configured"}</div></div>)}
     {privileged&&<div className="toolbar" style={{marginTop:15}}><label htmlFor="period">Generate work for period</label><input id="period" type="month" className="control" value={period} onChange={e=>setPeriod(e.target.value)}/><Button disabled={busy||preview} onClick={()=>void mutate(async()=>{const r=await generatePeriod(period);flash(r.created+" assignments created; "+r.already+" already existed.")},"Work generated.")}>Generate assignments</Button></div>}</Panel>
