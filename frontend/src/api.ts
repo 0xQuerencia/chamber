@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed,OnboardingStatus,FirmProfile} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -90,3 +90,6 @@ export const startMfaEnrollment=(challenge:string)=>api<MfaEnrollment>("/api/mfa
 export const verifyMfa=(challenge:string,code:string,deviceLabel:string)=>api<{ok:true}>("/api/mfa/verify","POST",{challenge,code,device_label:deviceLabel});
 
 export const getSecurityEvents=(page=0,event="")=>api<SecurityFeed>("/api/security/events?page="+page+(event?"&event="+encodeURIComponent(event):""));
+
+export const getOnboarding=()=>api<OnboardingStatus>("/api/onboarding");
+export const saveFirmProfile=(name:string,profile:FirmProfile)=>api<{ok:boolean}>("/api/onboarding/profile","PUT",{name,...profile});

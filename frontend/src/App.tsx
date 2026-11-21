@@ -13,6 +13,7 @@ import Reminders from "./Reminders";
 import KeyboardHelp from "./KeyboardHelp";
 import MfaAuth from "./MfaAuth";
 import SecurityLog from "./SecurityLog";
+import Onboarding from "./Onboarding";
 import {goShortcuts,isTextInteraction} from "./keyboard";
 import DeviceManager from "./DeviceManager";
 import SheetsSettings from "./SheetsSettings";
@@ -24,7 +25,7 @@ const navItems:{id:View;label:string;icon:typeof Home}[]=[
  {id:"desk",label:"Desk",icon:Home},{id:"work",label:"Work Register",icon:ClipboardList},{id:"board",label:"Work Board",icon:ClipboardList},{id:"myday",label:"My Day",icon:ClipboardList},{id:"clients",label:"Clients",icon:Users},{id:"import",label:"Import Clients",icon:ArrowDownToLine},{id:"requests",label:"Bulk Requests",icon:ClipboardList},{id:"reminders",label:"Reminders",icon:CalendarDays},{id:"insights",label:"Practice Dashboard",icon:ChartColumn},
  {id:"documents",label:"Documents",icon:FolderOpen},{id:"tracker",label:"Data Tracker",icon:FolderOpen},{id:"compliance",label:"Compliance",icon:CalendarDays},
  {id:"team",label:"Team",icon:BriefcaseBusiness},{id:"reports",label:"Reports",icon:ChartColumn},
- {id:"activity",label:"Activity & Sync",icon:ActivityIcon},{id:"security",label:"Security Audit",icon:ActivityIcon},{id:"settings",label:"Settings",icon:Settings}
+ {id:"activity",label:"Activity & Sync",icon:ActivityIcon},{id:"security",label:"Security Audit",icon:ActivityIcon},{id:"onboarding",label:"Firm Setup",icon:BriefcaseBusiness},{id:"settings",label:"Settings",icon:Settings}
 ];
 type ModalKind="client"|"task"|"document"|"staff"|"template"|"enrollment"|"requirement"|"override";
 const taskStatuses:TaskStatus[]=["todo","in_progress","waiting","blocked","review","done"];
@@ -360,7 +361,7 @@ export default function App(){
    </>;
   }
  let page:ReactNode=null;
- if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "settings":page=showSettings();break;}}
+ if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  if(mfaPending)return <MfaAuth challenge={mfaPending.challenge} enrollmentRequired={mfaPending.enrollmentRequired}
     deviceLabel={mfaPending.deviceLabel} onCancel={()=>{setMfaPending(null);setError("")}} onAuthenticated={async()=>{
@@ -372,7 +373,7 @@ export default function App(){
   {name:"MASTERS",items:["clients","team","import"]},
   {name:"TRANSACTIONS",items:["work","board","myday","documents","tracker","requests","reminders"]},
   {name:"REPORTS",items:["compliance","insights","reports","activity"]},
-  {name:"UTILITIES",items:[...(principal?["security" as View]:[]),"settings"]}
+  {name:"UTILITIES",items:[...(principal?["onboarding" as View,"security" as View]:[]),"settings"]}
  ];
  const shortcutActions:{key:string;label:string;onSelect:()=>void;disabled?:boolean}[]=[
   {key:"F1",label:"Gateway / Desk",onSelect:()=>navigate("desk")},

@@ -2,7 +2,7 @@ export type Role="principal"|"manager"|"staff";
 export type Priority="low"|"medium"|"high";
 export type TaskStatus="todo"|"in_progress"|"waiting"|"blocked"|"review"|"done";
 export type DocumentStatus="missing"|"requested"|"received"|"verified"|"rejected"|"not_applicable";
-export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"reminders"|"insights"|"compliance"|"team"|"reports"|"activity"|"security"|"settings";
+export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"reminders"|"insights"|"compliance"|"team"|"reports"|"activity"|"security"|"onboarding"|"settings";
 export type WorkFilter="all"|"mine"|"overdue"|TaskStatus;
 export interface Member {id:string;name:string;email:string;role:Role;active?:number}
 export interface Client {id:string;name:string;category:string;email:string|null;phone:string|null;pan:string|null;gstin:string|null;notes?:string|null;created_at:string;updated_at?:string;code?:string|null;client_group?:string|null;manager_id?:string|null}
@@ -73,3 +73,15 @@ export interface MfaEnrollment {secret:string;otpauth_uri:string;expires_in_seco
 
 export interface SecurityEvent {id:string;at:string;event:string;entity_type:string;entity_id:string;actor_name:string|null;actor_role:string|null;details:Record<string,unknown>}
 export interface SecurityFeed {events:SecurityEvent[];total:number;page:number;limit:number}
+
+export interface FirmProfile {timezone:string;financial_year_start_month:number;working_days:number[];contact_email:string;grievance_email:string;privacy_notice_url:string|null;updated_at:string|null}
+export interface OnboardingStatus {
+ firm:{id:string;name:string};
+ profile:FirmProfile;
+ counts:{users:number;clients:number;templates:number;requirements:number;enrollments:number;tasks:number;documents:number};
+ stages:{profile:boolean;team:boolean;clients:boolean;services:boolean;first_tasks:boolean};
+ completed_stages:number;total_stages:number;
+ integrations:{email:{connected:boolean;description:string};whatsapp:{connected:boolean;description:string};sheets:{connected:boolean};storage:{configured:boolean}};
+ security:{mfa_enabled:boolean};
+ note:string
+}

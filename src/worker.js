@@ -13,6 +13,7 @@ import {beginMfaChallenge,handleMfa} from "./mfa.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 import {clientScope,canReadClient,validClientManager} from "./permissions.js";
 import {handleSecurity} from "./security.js";
+import {handleOnboarding} from "./onboarding.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
@@ -450,6 +451,7 @@ async function api(request,env) {
     }
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
     if(path.startsWith("/api/security/"))return handleSecurity(request,env,user,{output,fail,clean});
+    if(path==="/api/onboarding"||path==="/api/onboarding/profile")return handleOnboarding(request,env,user,{output,fail,clean,audit,iso,bodyJSON,validEmail});
     if(path==="/api/devices"&&method==="GET"){
       const principal=user.role==="principal";
       const devices=(await env.DB.prepare("SELECT d.id,d.label,d.user_agent,d.first_seen_at,d.last_seen_at,d.trusted,d.revoked_at,d.user_id,u.name AS user_name FROM devices d JOIN users u ON u.id=d.user_id AND u.firm_id=d.firm_id WHERE d.firm_id=? "+(principal?"":"AND d.user_id=? ")+"ORDER BY d.last_seen_at DESC LIMIT 300")
