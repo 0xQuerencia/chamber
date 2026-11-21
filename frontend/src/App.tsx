@@ -14,6 +14,7 @@ import KeyboardHelp from "./KeyboardHelp";
 import MfaAuth from "./MfaAuth";
 import SecurityLog from "./SecurityLog";
 import Onboarding from "./Onboarding";
+import ClientPortal from "./ClientPortal";
 import {goShortcuts,isTextInteraction} from "./keyboard";
 import DeviceManager from "./DeviceManager";
 import SheetsSettings from "./SheetsSettings";
@@ -363,6 +364,8 @@ export default function App(){
  let page:ReactNode=null;
  if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
+ const portalToken=typeof window==="undefined"?null:window.location.hash.match(/^#\/portal\/([0-9a-f]{64})$/)?.[1];
+ if(portalToken)return <ClientPortal token={portalToken}/>;
  if(mfaPending)return <MfaAuth challenge={mfaPending.challenge} enrollmentRequired={mfaPending.enrollmentRequired}
     deviceLabel={mfaPending.deviceLabel} onCancel={()=>{setMfaPending(null);setError("")}} onAuthenticated={async()=>{
       const d=await getWorkspace();setWorkspace(d);setSession({authenticated:true,needs_setup:false,user:d.user});
