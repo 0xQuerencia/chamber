@@ -73,7 +73,7 @@ export async function handleWork(request,env,user,deps){
  }
 
  if(kind==="comments"&&method==="GET"){
-  const comments=(await db.prepare("SELECT c.id,c.body,c.created_at,u.name AS author FROM task_comments c JOIN users u ON c.user_id=u.id WHERE c.firm_id=? AND c.task_id=? ORDER BY c.created_at,id")
+  const comments=(await db.prepare("SELECT c.id,c.body,c.created_at,u.name AS author FROM task_comments c JOIN users u ON c.user_id=u.id WHERE c.firm_id=? AND c.task_id=? ORDER BY c.created_at,c.id")
    .bind(user.firm_id,taskId).all()).results;
   return output({comments});
  }
