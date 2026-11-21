@@ -5,7 +5,7 @@ import { normalizeIdentifier,validPan,validGstin,validClientPhone } from "./clie
 export async function handleImports(request,env,user,deps){
  const {output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail,csvCell}=deps;
  const db=env.DB,path=new URL(request.url).pathname,method=request.method;
- if(!isPrivileged(user))return fail("Insufficient permission",403);
+ if(user.role!=="principal")return fail("Only principal may import firm-wide client records",403);
  const batchMatch=path.match(/^\/api\/imports\/([a-f0-9-]+)(?:\/(rows|complete|undo|errors))?$/);
 
  async function findBatch(batchId){
