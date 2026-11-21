@@ -1,4 +1,5 @@
 import { normalizeIdentifier,validPan,validGstin,validClientPhone } from "./client-validation.js";
+import {canReadClient,canManageClient,validClientManager} from "./permissions.js";
 
 // Clients, contacts and registrations are always accessed in the authenticated firm's scope.
 export async function handleClientMaster(request,env,user,deps){
@@ -10,8 +11,7 @@ export async function handleClientMaster(request,env,user,deps){
  const cid=clientMatch[1],action=clientMatch[2]||"";
  const client=await db.prepare("SELECT * FROM clients WHERE firm_id=? AND id=?").bind(user.firm_id,cid).first();
  if(!client)return fail("Client not found",404);
- const assigned=privileged||!!(await db.prepare("SELECT id FROM tasks WHERE firm_id=? AND client_id=? AND assignee_id=? LIMIT 1")
-  .bind(user.firm_id,cid,user.id).first());
+ const assigned=await canReadClient(db,user,cid);
  if(!assigned)return fail("Insufficient permission",403);
 
  if(action==="profile"&&method==="GET"){
@@ -27,7 +27,7 @@ export async function handleClientMaster(request,env,user,deps){
   })),gstins});
  }
 
- if(!privileged)return fail("Insufficient permission",403);
+ if(!privileged||!(await canManageClient(db,user,cid)))return fail("Insufficient permission",403);
  if(client.archived_at&&action!=="profile")return fail("Archived client cannot be changed",409);
 
  if(!action&&method==="PATCH"){
@@ -41,13 +41,12 @@ export async function handleClientMaster(request,env,user,deps){
   const notes=data.notes===undefined?client.notes:clean(data.notes,1000);
   const code=data.code===undefined?client.code:clean(data.code,40).toUpperCase();
   const group=data.client_group===undefined?client.client_group:clean(data.client_group,120);
-  const manager=data.manager_id===undefined?client.manager_id:clean(data.manager_id,100);
+  const manager=user.role==="manager"?user.id:(data.manager_id===undefined?client.manager_id:clean(data.manager_id,100));
   if(!name||!category||(pan&&!validPan(pan))||(gstin&&!validGstin(gstin))||
     (email&&!validEmail(email))||!validClientPhone(phone)||!/^[-A-Z0-9_]*$/.test(code||""))
    return fail("Check client name, PAN, GSTIN, email, phone and client code");
   if(manager){
-   const row=await db.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND active=1").bind(user.firm_id,manager).first();
-   if(!row)return fail("Manager not found in firm",400);
+   if(!(await validClientManager(db,user.firm_id,manager)))return fail("Manager not found in firm",400);
   }
   const duplicates=await db.prepare("SELECT id FROM clients WHERE firm_id=? AND id!=? AND archived_at IS NULL AND ( (pan=? AND ?!='') OR (gstin=? AND ?!='') OR (code=? AND ?!='')) LIMIT 1")
    .bind(user.firm_id,cid,pan||"",pan||"",gstin||"",gstin||"",code||"",code||"").first();

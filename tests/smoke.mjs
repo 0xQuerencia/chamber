@@ -240,6 +240,74 @@ const resolvedReminder=ok(await call("/api/reminders/refresh","POST",{}));
 assert.ok(resolvedReminder.result.resolved>=1);
 const resolvedFeed=ok(await call("/api/reminders?status=resolved"));
 assert.ok(resolvedFeed.items.some(x=>x.id===pending.id));
+// Manager isolation: team-owned clients may be accessed; unrelated clients must remain hidden.
+const teamManager=ok(await call("/api/staff","POST",{
+  name:"Test Manager",email:"manager@example.test",password:"manager-strong-password-123",role:"manager"
+}));
+const reportStaff=ok(await call("/api/staff","POST",{
+  name:"Managed Article",email:"article@example.test",password:"article-strong-password-123",role:"staff",manager_id:teamManager.id
+}));
+const otherStaff=ok(await call("/api/staff","POST",{
+  name:"Separate Staff",email:"other-staff@example.test",password:"other-strong-password-123",role:"staff"
+}));
+const managedClient=ok(await call("/api/clients","POST",{name:"Manager Team Client",manager_id:teamManager.id,email:"managed@example.test"}));
+const privateClient=ok(await call("/api/clients","POST",{name:"Other Team Confidential",email:"separate@example.test"}));
+const managedTask=ok(await call("/api/tasks","POST",{
+  client_id:managedClient.id,title:"Manager Team GST",service:"GST",period:"2026-11",due_date:"2026-12-29",
+  assignee_id:reportStaff.id
+}));
+const privateTask=ok(await call("/api/tasks","POST",{
+  client_id:privateClient.id,title:"Other Team Audit",service:"Audit",period:"2026-11",due_date:"2026-12-30",
+  assignee_id:otherStaff.id
+}));
+const managedDocument=ok(await call("/api/documents","POST",{task_id:managedTask.id,name:"Purchase invoices"}));
+ok(await call("/api/documents","POST",{task_id:privateTask.id,name:"Confidential private ledger"}));
+const passwordManager=await call("/api/login","POST",{email:"manager@example.test",password:"manager-strong-password-123"},"");
+assert.equal(passwordManager.body.requires_mfa,true);
+const managerSecret=ok(await call("/api/mfa/setup","POST",{challenge:passwordManager.body.challenge},""));
+const verifiedManager=await call("/api/mfa/verify","POST",{
+  challenge:passwordManager.body.challenge,code:otpCode(managerSecret.secret),device_label:"Manager office PC"
+},"");
+ok(verifiedManager);
+const managerCookie=verifiedManager.res.headers.get("set-cookie").split(";")[0];
+const managerSnapshot=ok(await call("/api/bootstrap","GET",undefined,managerCookie));
+assert.ok(managerSnapshot.clients.some(c=>c.id===managedClient.id));
+assert.equal(managerSnapshot.clients.some(c=>c.id===privateClient.id),false);
+assert.equal(managerSnapshot.tasks.some(t=>t.id===privateTask.id),false);
+assert.equal(managerSnapshot.documents.some(d=>d.client_id===privateClient.id),false);
+const managerProfile=ok(await call("/api/clients/"+managedClient.id+"/profile","GET",undefined,managerCookie));
+assert.equal(managerProfile.client.id,managedClient.id);
+assert.equal((await call("/api/clients/"+privateClient.id+"/profile","GET",undefined,managerCookie)).res.status,403);
+assert.equal((await call("/api/tasks","POST",{client_id:privateClient.id,title:"Unauthorized",service:"Audit"},managerCookie)).res.status,400);
+assert.equal((await call("/api/tasks/"+privateTask.id,"PATCH",{status:"done"},managerCookie)).res.status,403);
+assert.equal((await call("/api/tasks/"+privateTask.id+"/comments","GET",undefined,managerCookie)).res.status,404);
+assert.equal((await call("/api/tracker/detail?client_id="+privateClient.id+"&period=2026-11","GET",undefined,managerCookie)).res.status,404);
+assert.equal((await call("/api/inward","POST",{
+  client_id:privateClient.id,period:"2026-11",document_ids:[managedDocument.id]
+},managerCookie)).res.status,404);
+assert.equal((await call("/api/export?kind=clients","GET",undefined,managerCookie)).res.status,403);
+assert.equal((await call("/api/imports","GET",undefined,managerCookie)).res.status,403);
+assert.equal((await call("/api/reminders/refresh","POST",{},managerCookie)).res.status,403);
+assert.equal((await call("/api/templates","POST",{
+  name:"Unapproved global template",service:"GST",frequency:"monthly",due_day:15
+},managerCookie)).res.status,403);
+assert.equal((await call("/api/tasks/"+managedTask.id+"/assignment","PATCH",{
+  assignee_id:otherStaff.id
+},managerCookie)).res.status,403);
+const managerNewClient=ok(await call("/api/clients","POST",{name:"Manager Added Company"},managerCookie));
+const ownedProfile=ok(await call("/api/clients/"+managerNewClient.id+"/profile","GET",undefined,managerCookie));
+assert.equal(ownedProfile.client.manager_id,teamManager.id);
+const trackerForManager=ok(await call("/api/tracker?from=2026-04","GET",undefined,managerCookie));
+assert.ok(trackerForManager.clients.some(c=>c.id===managedClient.id));
+assert.equal(trackerForManager.clients.some(c=>c.id===privateClient.id),false);
+const managerDashboard=ok(await call("/api/reports/dashboard","GET",undefined,managerCookie));
+const managerWork=ok(await call("/api/reports/drilldown?kind=missing","GET",undefined,managerCookie));
+assert.equal(managerDashboard.kpis.missing,managerWork.total);
+assert.equal(managerWork.rows.some(r=>r.client_id===privateClient.id),false);
+const managerPreview=ok(await call("/api/messages/preview","POST",{
+  channel:"email",period:"2026-11",client_ids:[managedClient.id,privateClient.id]
+},managerCookie));
+assert.equal(managerPreview.previews.find(p=>p.client_id===privateClient.id).eligible,false);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");

@@ -1,3 +1,4 @@
+import {canReadClient,clientScope} from "./permissions.js";
 // Draft-only communications. Never claims to send WhatsApp or email.
 const DEFAULT_BODY="Dear {client},\n\nPlease provide the following documents for {month}:\n{missing_list}\n\nRequested by: {due}\n\nRegards,\nChamber";
 const channels=new Set(["email","whatsapp"]);
@@ -22,6 +23,9 @@ export async function handleMessages(request,env,user,deps){
   if(body.length<10||body.length>2000)return {error:"Message body must contain 10–2000 characters"};
   const previews=[];
   for(const cid of ids){
+   if(!(await canReadClient(db,user,cid))){
+    previews.push({client_id:cid,client_name:"Unavailable",eligible:false,reason:"Client unavailable",recipient:null,contact_id:null,missing_count:0,body:""});continue;
+   }
    const client=await db.prepare("SELECT id,name,email FROM clients WHERE firm_id=? AND id=? AND archived_at IS NULL")
     .bind(user.firm_id,cid).first();
    if(!client){previews.push({client_id:cid,client_name:"Unavailable",eligible:false,reason:"Client unavailable",recipient:null,contact_id:null,missing_count:0,body:""});continue}
@@ -51,6 +55,7 @@ export async function handleMessages(request,env,user,deps){
   return output({templates});
  }
  if(path==="/api/messages/templates"&&method==="POST"){
+  if(user.role!=="principal")return fail("Only principal can change firm-wide message templates",403);
   const data=await bodyJSON(request),name=clean(data.name,100),channel=clean(data.channel,20),body=String(data.body||"");
   if(!name||!channels.has(channel)||body.length<10||body.length>2000)return fail("Template name, channel and 10–2000 character body required");
   const at=iso(),tid=id();
@@ -85,13 +90,15 @@ export async function handleMessages(request,env,user,deps){
  }
 
  if(path==="/api/messages/batches"&&method==="GET"){
-  const batches=(await db.prepare("SELECT id,channel,period,status,recipient_count,created_at FROM message_batches WHERE firm_id=? ORDER BY created_at DESC LIMIT 30")
-   .bind(user.firm_id).all()).results;
+  const mine=user.role==="manager";
+  const batches=(await db.prepare("SELECT id,channel,period,status,recipient_count,created_at FROM message_batches WHERE firm_id=? "+(mine?"AND created_by=? ":"")+"ORDER BY created_at DESC LIMIT 30")
+   .bind(...(mine?[user.firm_id,user.id]:[user.firm_id])).all()).results;
   return output({batches,delivery_enabled:false});
  }
  const match=path.match(/^\/api\/messages\/batches\/([a-f0-9-]+)(?:\/cancel)?$/);
  if(match){
-  const batch=await db.prepare("SELECT id,channel,period,status,recipient_count FROM message_batches WHERE firm_id=? AND id=?").bind(user.firm_id,match[1]).first();
+  const batch=await db.prepare("SELECT id,channel,period,status,recipient_count FROM message_batches WHERE firm_id=? AND id=? "+(user.role==="manager"?"AND created_by=?":""))
+   .bind(...(user.role==="manager"?[user.firm_id,match[1],user.id]:[user.firm_id,match[1]])).first();
   if(!batch)return fail("Batch not found",404);
   if(path.endsWith("/cancel")&&method==="POST"){
    if(batch.status!=="draft")return fail("Only draft batches can be cancelled",409);
@@ -103,7 +110,9 @@ export async function handleMessages(request,env,user,deps){
    return output({ok:true});
   }
   if(!path.endsWith("/cancel")&&method==="GET"){
-   const messages=(await db.prepare("SELECT m.id,m.client_id,c.name AS client_name,m.contact_id,m.recipient,m.body,m.status,m.error FROM messages m JOIN clients c ON c.id=m.client_id AND c.firm_id=m.firm_id WHERE m.firm_id=? AND m.batch_id=? ORDER BY c.name").bind(user.firm_id,batch.id).all()).results;
+   const scope=clientScope(user,"c");
+   const messages=(await db.prepare("SELECT m.id,m.client_id,c.name AS client_name,m.contact_id,m.recipient,m.body,m.status,m.error FROM messages m JOIN clients c ON c.id=m.client_id AND c.firm_id=m.firm_id WHERE m.firm_id=? AND m.batch_id=? AND "+scope.sql+" ORDER BY c.name")
+    .bind(user.firm_id,batch.id,...scope.args).all()).results;
    return output({batch,messages,delivery_enabled:false});
   }
  }

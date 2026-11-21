@@ -11,6 +11,7 @@ import { handleFiles, scanCallback } from "./files.js";
 import { handleReminderApi, refreshReminderSuggestions } from "./reminders.js";
 import {beginMfaChallenge,handleMfa} from "./mfa.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
+import {clientScope,canReadClient,validClientManager} from "./permissions.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
@@ -136,31 +137,35 @@ async function issueSession(request,env,user,deviceLabel){
   const secure=new URL(request.url).protocol==="https:"?"; Secure":"";
   return output({ok:true},200,{"Set-Cookie":"chamber_session="+token+"; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800"+secure});
 }
-async function bootstrap(db, user) {
-  const privileged = isPrivileged(user);
-  const [firm, staff, clients, tasks, documents, activity, templates, enrollments, requirements] = await Promise.all([
-    db.prepare("SELECT id,name FROM firms WHERE id=?").bind(user.firm_id).first(),
-    db.prepare("SELECT id,name,email,role,active FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
-    (privileged
-      ? db.prepare("SELECT * FROM clients WHERE firm_id=? AND archived_at IS NULL ORDER BY name").bind(user.firm_id)
-      : db.prepare("SELECT DISTINCT c.id,c.name,c.category,c.email,c.phone,c.created_at,c.updated_at, NULL AS pan,NULL AS gstin,NULL AS notes FROM clients c JOIN tasks t ON c.id=t.client_id WHERE c.firm_id=? AND c.archived_at IS NULL AND t.firm_id=? AND t.assignee_id=? ORDER BY c.name").bind(user.firm_id,user.firm_id,user.id)).all(),
-    (privileged
-      ? db.prepare("SELECT * FROM tasks WHERE firm_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id)
-      : db.prepare("SELECT * FROM tasks WHERE firm_id=? AND assignee_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id,user.id)).all(),
-    (privileged
-      ? db.prepare("SELECT * FROM documents WHERE firm_id=? ORDER BY updated_at DESC LIMIT 3000").bind(user.firm_id)
-      : db.prepare("SELECT d.* FROM documents d JOIN tasks t ON t.id=d.task_id AND t.firm_id=d.firm_id WHERE d.firm_id=? AND t.assignee_id=? ORDER BY d.updated_at DESC LIMIT 3000").bind(user.firm_id,user.id)).all(),
-    (privileged
-      ? db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id)
-      : db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
-    db.prepare("SELECT id,name,service,frequency,due_day,ask_by_lead_days,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
-    (privileged?db.prepare("SELECT * FROM service_enrollments WHERE firm_id=?").bind(user.firm_id):db.prepare("SELECT * FROM service_enrollments WHERE firm_id=? AND assignee_id=?").bind(user.firm_id,user.id)).all(),
-    db.prepare("SELECT id,template_id,name,required,sort_order FROM requirement_templates WHERE firm_id=? ORDER BY sort_order,name").bind(user.firm_id).all()
+async function bootstrap(db,user){
+  const scope=clientScope(user,"c");
+  const principal=user.role==="principal",staffOnly=user.role==="staff",manager=user.role==="manager";
+  const [firm,staff,clients,tasks,documents,activity,templates,enrollments,requirements]=await Promise.all([
+   db.prepare("SELECT id,name FROM firms WHERE id=?").bind(user.firm_id).first(),
+   (principal?db.prepare("SELECT id,name,email,role,active,manager_id FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id):
+    manager?db.prepare("SELECT id,name,email,role,active,manager_id FROM users WHERE firm_id=? AND (id=? OR manager_id=?) ORDER BY name").bind(user.firm_id,user.id,user.id):
+    db.prepare("SELECT id,name,email,role,active,manager_id FROM users WHERE firm_id=? AND id=?").bind(user.firm_id,user.id)).all(),
+   db.prepare("SELECT "+(staffOnly?"c.id,c.name,c.category,c.code,c.email,c.phone,c.created_at,c.updated_at,NULL AS pan,NULL AS gstin,NULL AS notes":"c.*")+
+     " FROM clients c WHERE c.firm_id=? AND c.archived_at IS NULL AND "+scope.sql+" ORDER BY c.name")
+    .bind(user.firm_id,...scope.args).all(),
+   db.prepare("SELECT t.* FROM tasks t JOIN clients c ON c.id=t.client_id AND c.firm_id=t.firm_id "+
+    "WHERE t.firm_id=? AND "+scope.sql+(staffOnly?" AND t.assignee_id=?":"")+" ORDER BY t.due_date ASC,t.created_at DESC LIMIT 2000")
+    .bind(user.firm_id,...scope.args,...(staffOnly?[user.id]:[])).all(),
+   db.prepare("SELECT d.* FROM documents d JOIN tasks t ON t.id=d.task_id AND t.firm_id=d.firm_id "+
+    "JOIN clients c ON c.id=d.client_id AND c.firm_id=d.firm_id WHERE d.firm_id=? AND "+scope.sql+
+    (staffOnly?" AND t.assignee_id=?":"")+" ORDER BY d.updated_at DESC LIMIT 3000")
+    .bind(user.firm_id,...scope.args,...(staffOnly?[user.id]:[])).all(),
+   (principal?db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id):
+    db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
+   db.prepare("SELECT id,name,service,frequency,due_day,ask_by_lead_days,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
+   db.prepare("SELECT e.* FROM service_enrollments e JOIN clients c ON c.id=e.client_id AND c.firm_id=e.firm_id WHERE e.firm_id=? AND "+scope.sql+(staffOnly?" AND e.assignee_id=?":""))
+    .bind(user.firm_id,...scope.args,...(staffOnly?[user.id]:[])).all(),
+   db.prepare("SELECT id,template_id,name,required,sort_order FROM requirement_templates WHERE firm_id=? ORDER BY sort_order,name").bind(user.firm_id).all()
   ]);
-  return output({ firm, user: { id:user.id, name:user.name, email:user.email, role:user.role },
-    staff: staff.results, clients: clients.results, tasks: tasks.results,
-    documents: documents.results, activity: activity.results, templates: templates.results, enrollments: enrollments.results,
-    requirements: requirements.results });
+  return output({firm,user:{id:user.id,name:user.name,email:user.email,role:user.role},
+   staff:staff.results,clients:clients.results,tasks:tasks.results,documents:documents.results,
+   activity:activity.results,templates:templates.results,enrollments:enrollments.results,
+   requirements:requirements.results});
 }
 async function validateFirmUser(db, firmId, userId) {
   if (!userId) return true;
@@ -171,11 +176,11 @@ async function handleCreateClient(data, env, user) {
   const name=clean(data.name,150),email=clean(data.email,200),category=clean(data.category||"Business",50);
   const pan=normalizeIdentifier(clean(data.pan,20)),gstin=normalizeIdentifier(clean(data.gstin,20));
   const phone=clean(data.phone,30),code=clean(data.code,40).toUpperCase(),group=clean(data.client_group,120);
-  const manager=clean(data.manager_id,100);
+  const manager=user.role==="manager"?user.id:clean(data.manager_id,100);
   if(!name||(email&&!validEmail(email))||(pan&&!validPan(pan))||(gstin&&!validGstin(gstin))||
      !validClientPhone(phone)||(code&&!/^[-A-Z0-9_]+$/.test(code)))
     return fail("Check client name, email, PAN, GSTIN, phone and code");
-  if(manager&&!(await validateFirmUser(env.DB,user.firm_id,manager)))return fail("Manager not found in firm");
+  if(manager&&!(await validClientManager(env.DB,user.firm_id,manager)))return fail("Manager not found in firm");
   const duplicate=await env.DB.prepare("SELECT id FROM clients WHERE firm_id=? AND archived_at IS NULL AND ( (pan=? AND ?!='') OR (gstin=? AND ?!='') OR (code=? AND ?!='')) LIMIT 1")
     .bind(user.firm_id,pan,pan,gstin,gstin,code,code).first();
   if(duplicate)return fail("Duplicate client PAN, GSTIN or code",409);
@@ -191,9 +196,17 @@ async function handleCreateTask(data, env, user) {
   if (!isPrivileged(user)) return fail("Insufficient permission",403);
   const clientId=clean(data.client_id,100), title=clean(data.title,180), service=clean(data.service,80);
   const client=await env.DB.prepare("SELECT id FROM clients WHERE firm_id=? AND id=?").bind(user.firm_id,clientId).first();
-  if (!client || !title || !service) return fail("Valid client, title and service required");
+  if (!client || !title || !service || !(await canReadClient(env.DB,user,clientId))) return fail("Valid accessible client, title and service required");
   const assignee=clean(data.assignee_id,80), reviewer=clean(data.reviewer_id,80);
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee)) || !(await validateFirmUser(env.DB,user.firm_id,reviewer))) return fail("Assignee or reviewer not found in firm");
+  if(user.role==="manager"){
+   for(const target of [assignee,reviewer]){
+    if(!target)continue;
+    const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+      .bind(user.firm_id,target,user.id,user.id).first();
+    if(!teammate)return fail("You may assign work only to your own team",403);
+   }
+  }
   const due=clean(data.due_date,10);
   if (due && !validCalendarDate(due)) return fail("Due date must be a valid YYYY-MM-DD calendar date");
   const taskId=id(), at=iso();
@@ -210,11 +223,17 @@ async function handleCreateTask(data, env, user) {
 async function handleUpdateTask(taskId, data, env, user) {
   const previous=await env.DB.prepare("SELECT * FROM tasks WHERE firm_id=? AND id=?").bind(user.firm_id,taskId).first();
   if (!previous) return fail("Task not found",404);
+  if(!(await canReadClient(env.DB,user,previous.client_id)))return fail("Insufficient permission",403);
   if (!isPrivileged(user) && (previous.assignee_id!==user.id || previous.status==="done")) return fail("Insufficient permission",403);
   const status=data.status===undefined?previous.status:safeStatus(data.status);
   if (!status || !statusForRole(user.role,status)) return fail("Status not permitted");
   const assignee=isPrivileged(user) && data.assignee_id!==undefined?clean(data.assignee_id,80):previous.assignee_id;
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee))) return fail("Assignee not found in firm");
+  if(user.role==="manager"&&assignee){
+   const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+    .bind(user.firm_id,assignee,user.id,user.id).first();
+   if(!teammate)return fail("You may assign work only to your own team",403);
+  }
   const notes=data.notes===undefined?previous.notes:clean(data.notes,2000);
   const at=iso();
   const completed=status==="done"?(previous.completed_at||at):null;
@@ -229,7 +248,7 @@ async function handleUpdateTask(taskId, data, env, user) {
 }
 async function loadTaskForDocument(db,user,taskId) {
   const task=await db.prepare("SELECT id,client_id,assignee_id FROM tasks WHERE id=? AND firm_id=?").bind(taskId,user.firm_id).first();
-  return task && (isPrivileged(user)||task.assignee_id===user.id)?task:null;
+  return task && (await canReadClient(db,user,task.client_id)) && (isPrivileged(user)||task.assignee_id===user.id)?task:null;
 }
 async function handleCreateDocument(data,env,user) {
   const taskId=clean(data.task_id,100), name=clean(data.name,180);
@@ -263,13 +282,14 @@ async function handleUpdateDocument(docId,data,env,user) {
 async function handleCreateStaff(data,env,user) {
   if (user.role!=="principal") return fail("Only principals can add staff",403);
   const name=clean(data.name,100), email=clean(data.email,200).toLowerCase(), role=data.role==="manager"?"manager":"staff";
-  const password=String(data.password||"");
+  const password=String(data.password||""),managerId=clean(data.manager_id,100);
   if(!name||!validEmail(email)||password.length<12||password.length>128) return fail("Name, valid email and password (12–128 characters) required");
+  if(managerId&&!(await validClientManager(env.DB,user.firm_id,managerId)))return fail("Reporting manager must be a principal or manager in this firm");
   const pw=await passwordRecord(password), userId=id();
   try {
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO users(id,firm_id,name,email,role,salt,password_hash,active,created_at) VALUES (?,?,?,?,?,?,?,?,?)")
-        .bind(userId,user.firm_id,name,email,role,pw.salt,pw.password_hash,1,iso()),
+      env.DB.prepare("INSERT INTO users(id,firm_id,name,email,role,salt,password_hash,active,created_at,manager_id) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind(userId,user.firm_id,name,email,role,pw.salt,pw.password_hash,1,iso(),role==="manager"?null:managerId||null),
       await audit(env.DB,user,"created","user",userId,{role})
     ]);
   } catch(e) {if(String(e).includes("UNIQUE"))return fail("Email already used",409);throw e;}
@@ -295,7 +315,7 @@ function plannedDueDate(ym,frequency,day) {
   return date.toISOString().slice(0,10);
 }
 async function handleCreateTemplate(data,env,user){
-  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  if(user.role!=="principal")return fail("Only principal may change firm-wide compliance templates",403);
   const name=clean(data.name,120),service=clean(data.service,80),frequency=String(data.frequency||"");
   const day=Number(data.due_day);
   const lead=data.ask_by_lead_days===undefined?10:Number(data.ask_by_lead_days);
@@ -316,7 +336,12 @@ async function handleEnroll(data,env,user){
     env.DB.prepare("SELECT id FROM service_templates WHERE firm_id=? AND id=? AND active=1").bind(user.firm_id,templateId).first(),
     validateFirmUser(env.DB,user.firm_id,assigneeId)
   ]);
-  if(!clientRecord||!templateRecord||!validUser)return fail("Invalid client, template or assignee");
+  if(!clientRecord||!templateRecord||!validUser||!(await canReadClient(env.DB,user,clientId)))return fail("Invalid accessible client, template or assignee");
+  if(user.role==="manager"&&assigneeId){
+   const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+    .bind(user.firm_id,assigneeId,user.id,user.id).first();
+   if(!teammate)return fail("Enrollment assignee must belong to your own team",403);
+  }
   await env.DB.batch([
     env.DB.prepare("INSERT INTO service_enrollments(id,firm_id,client_id,template_id,assignee_id,active,created_at) VALUES (?,?,?,?,?,1,?) ON CONFLICT(firm_id,client_id,template_id) DO UPDATE SET assignee_id=excluded.assignee_id,active=1")
       .bind(id(),user.firm_id,clientId,templateId,assigneeId||null,iso()),
@@ -370,7 +395,7 @@ async function generatePeriod(db,ym,firmId=null,actorId=null) {
   return {created,already,checked:records.length};
 }
 async function handleGenerate(data,env,user){
-  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  if(user.role!=="principal")return fail("Only the principal can generate work for the entire firm",403);
   const period=clean(data.period,7);
   if(!calendarPeriod(period,"monthly"))return fail("Period must be YYYY-MM");
   const result=await generatePeriod(env.DB,period,user.firm_id,user.id);
@@ -378,7 +403,7 @@ async function handleGenerate(data,env,user){
 }
 
 async function handleExport(request,env,user) {
-  if (!isPrivileged(user)) return fail("Insufficient permission",403);
+  if (user.role!=="principal") return fail("Only principals may export firm-wide data",403);
   const kind=new URL(request.url).searchParams.get("kind");
   const columns={
     clients:["id","name","category","email","phone","created_at"],

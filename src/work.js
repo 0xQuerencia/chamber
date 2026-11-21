@@ -1,3 +1,4 @@
+import {canReadClient} from "./permissions.js";
 // Review, assignment, time and comment workflows. No device surveillance is performed.
 export async function handleWork(request,env,user,deps){
  const {output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validateFirmUser}=deps;
@@ -27,7 +28,7 @@ export async function handleWork(request,env,user,deps){
  const match=path.match(/^\/api\/tasks\/([a-f0-9-]+)\/(assignment|review|comments|timer|time)$/);
  if(!match)return fail("Not found",404);
  const taskId=match[1],kind=match[2],task=await db.prepare("SELECT * FROM tasks WHERE firm_id=? AND id=?").bind(user.firm_id,taskId).first();
- if(!task)return fail("Task not found",404);
+ if(!task||!(await canReadClient(db,user,task.client_id)))return fail("Task not found",404);
  const assigned=task.assignee_id===user.id;
  const canAccess=elevated||assigned||task.reviewer_id===user.id;
  if(!canAccess)return fail("Insufficient permission",403);
@@ -39,6 +40,14 @@ export async function handleWork(request,env,user,deps){
   const reviewer=data.reviewer_id===null?"":clean(data.reviewer_id===undefined?task.reviewer_id:data.reviewer_id,100);
   if(!(await validateFirmUser(db,user.firm_id,assignee))||!(await validateFirmUser(db,user.firm_id,reviewer)))
    return fail("Assignee and reviewer must belong to this firm");
+  if(user.role==="manager"){
+   for(const target of [assignee,reviewer]){
+    if(!target)continue;
+    const permitted=await db.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+     .bind(user.firm_id,target,user.id,user.id).first();
+    if(!permitted)return fail("Only members of your team may be assigned or review this work",403);
+   }
+  }
   const at=iso();
   await db.batch([
    db.prepare("UPDATE tasks SET assignee_id=?,reviewer_id=?,updated_at=? WHERE firm_id=? AND id=?")
