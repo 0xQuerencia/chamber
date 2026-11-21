@@ -30,6 +30,12 @@ test("Fictional preview supports keyboard navigation and command search",async({
  await expect(page.getByRole("dialog",{name:"Chamber keyboard shortcut guide"})).toBeVisible();
  await page.keyboard.press("Escape");
  await expect(page.getByRole("dialog",{name:"Chamber keyboard shortcut guide"})).toHaveCount(0);
+ await page.keyboard.press("F10");
+ await page.locator(".tp-gateway-menu").getByRole("button",{name:"Data Request"}).click();
+ await expect(page.getByText("WhatsApp message preview")).toBeVisible();
+ await page.keyboard.press("F10");
+ await page.locator(".tp-gateway-menu").getByRole("button",{name:"Data Received"}).click();
+ await expect(page.getByText("Status (Y N P A)")).toBeVisible();
 });
 test("Anonymous client-upload link reveals no data before verification",async({page})=>{
  await page.goto("/#/portal/"+("a".repeat(64)));
