@@ -325,6 +325,35 @@ assert.ok(securityFeed.events.every(e=>!JSON.stringify(e).includes("strong-passw
 assert.ok(securityFeed.events.every(e=>!JSON.stringify(e).includes("otpauth://")));
 const filteredSecurity=ok(await call("/api/security/events?event=access_denied"));
 assert.equal(filteredSecurity.events.every(e=>e.event==="access_denied"),true);
+const initialOnboarding=ok(await call("/api/onboarding"));
+assert.ok(initialOnboarding.counts.users>=2);
+assert.ok(initialOnboarding.counts.clients>=2);
+assert.ok(initialOnboarding.stages.clients);
+assert.ok(initialOnboarding.stages.services);
+assert.ok(initialOnboarding.stages.first_tasks);
+assert.equal(initialOnboarding.security.mfa_enabled,true);
+assert.equal(initialOnboarding.integrations.email.connected,false);
+assert.equal(initialOnboarding.integrations.whatsapp.connected,false);
+assert.equal(initialOnboarding.stages.profile,false);
+const staffOnboarding=await call("/api/onboarding","GET",undefined,staffCookie);
+assert.equal(staffOnboarding.res.status,403);
+const badFirmProfile=await call("/api/onboarding/profile","PUT",{
+ name:"Chamber Test Firm",timezone:"Asia/Kolkata",financial_year_start_month:13,
+ working_days:[1,2,3,4,5],contact_email:"contact@example.test",grievance_email:"help@example.test"
+});
+assert.equal(badFirmProfile.res.status,400);
+ok(await call("/api/onboarding/profile","PUT",{
+ name:"Chamber Test Firm",timezone:"Asia/Kolkata",financial_year_start_month:4,
+ working_days:[1,2,3,4,5,6],contact_email:"contact@example.test",grievance_email:"help@example.test",
+ privacy_notice_url:"https://example.test/privacy"
+}));
+const configured=ok(await call("/api/onboarding"));
+assert.equal(configured.firm.name,"Chamber Test Firm");
+assert.equal(configured.profile.timezone,"Asia/Kolkata");
+assert.equal(configured.profile.contact_email,"contact@example.test");
+assert.deepEqual(configured.profile.working_days,[1,2,3,4,5,6]);
+assert.equal(configured.stages.profile,true);
+assert.equal(configured.completed_stages,5);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");
