@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed,OnboardingStatus,FirmProfile,DeliveryReadiness,QueuedSend} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed,OnboardingStatus,FirmProfile,DeliveryReadiness,QueuedSend,PortalLinkRecord,CreatedPortalLink,PortalChecklist,PortalNotification} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -101,3 +101,20 @@ export const undoQueuedBatch=(id:string)=>api<{ok:boolean;undo:boolean}>("/api/d
 export const retryFailedMessage=(batchId:string,messageId:string)=>api<{ok:boolean;status:string;send_after:string}>("/api/delivery/batches/"+encodeURIComponent(batchId)+"/retry","POST",{message_id:messageId});
 export const approveWhatsAppTemplate=(id:string,providerName:string,languageCode="en_US")=>api<{ok:boolean;note:string}>(
  "/api/messages/templates/"+encodeURIComponent(id)+"/provider","PUT",{provider_template_id:providerName,language_code:languageCode,confirm_approved:true});
+
+export const listPortalLinks=(clientId:string)=>api<{links:PortalLinkRecord[]}>("/api/portal/links?client_id="+encodeURIComponent(clientId));
+export const createPortalLink=(clientId:string,period:string,expiresDays=7)=>api<CreatedPortalLink>("/api/portal/links","POST",{client_id:clientId,period,expires_days:expiresDays});
+export const revokePortalLink=(linkId:string)=>api<{ok:boolean}>("/api/portal/links/"+encodeURIComponent(linkId)+"/revoke","POST",{});
+export const requestPortalCode=(token:string)=>api<{ok:boolean;notice:string}>("/api/portal/start","POST",{token});
+export const verifyPortalCode=(token:string,code:string)=>api<{ok:boolean;access_token:string;expires_in_seconds:number}>("/api/portal/verify","POST",{token,code});
+export const getPortalChecklist=(token:string,access:string)=>api<PortalChecklist>("/api/portal/checklist","POST",{},{"X-Portal-Link":token,"X-Portal-Access":access});
+export const getPortalNotifications=()=>api<{notifications:PortalNotification[]}>("/api/notifications");
+export const readPortalNotification=(id:string)=>api<{ok:boolean}>("/api/notifications/"+encodeURIComponent(id)+"/read","POST",{});
+export async function uploadPortalFile(token:string,access:string,requirementId:string,file:File):Promise<{ok:boolean;id:string;status:string;message:string}>{
+ const response=await fetch("/api/portal/upload?requirement_id="+encodeURIComponent(requirementId),{
+  method:"POST",credentials:"omit",headers:{"X-Portal-Link":token,"X-Portal-Access":access,"Content-Type":file.type,"X-File-Name":encodeURIComponent(file.name)},body:file
+ });
+ const result=await response.json().catch(()=>({}));
+ if(!response.ok)throw new ApiError(typeof result.error==="string"?result.error:"File upload failed",response.status);
+ return result;
+}

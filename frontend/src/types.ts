@@ -88,3 +88,8 @@ export interface OnboardingStatus {
 
 export interface DeliveryReadiness {email:boolean;whatsapp:boolean;safety:{scheduled_undo_seconds:number;quiet_hours_ist:string;template_approval_required:boolean}}
 export interface QueuedSend {ok:true;status:"queued";send_after:string;undo_until:string;count:number}
+
+export interface PortalLinkRecord {id:string;period:string;recipient_email:string;created_at:string;expires_at:string;revoked_at:string|null}
+export interface CreatedPortalLink {id:string;url:string;recipient_email:string;expires_at:string;warning:string}
+export interface PortalChecklist {client_name:string;period:string;requirements:Array<{id:string;name:string;status:string;received_at:string|null}>;upload_limit_bytes:number;notice:string}
+export interface PortalNotification {id:string;client_id:string;task_id:string;message:string;created_at:string;read_at:string|null}

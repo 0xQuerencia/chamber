@@ -114,8 +114,8 @@ export async function scanCallback(request,env){
    .bind(crypto.randomUUID(),file.firm_id,null,"scanned","stored_document",file.id,JSON.stringify({status:data.status}),at)
  ];
  if(data.status==="clean"){
-  updates.push(env.DB.prepare("UPDATE documents SET status=CASE WHEN status IN ('verified','not_applicable') THEN status ELSE 'received' END,received_at=COALESCE(received_at,?),received_via=COALESCE(received_via,'upload'),updated_at=? WHERE id=? AND firm_id=?")
-   .bind(at,at,file.requirement_id,file.firm_id));
+  updates.push(env.DB.prepare("UPDATE documents SET status=CASE WHEN status IN ('verified','not_applicable') THEN status ELSE 'received' END,received_at=COALESCE(received_at,?),received_via=COALESCE(received_via,?),updated_at=? WHERE id=? AND firm_id=?")
+   .bind(at,file.uploaded_via==="portal"?"portal":"upload",at,file.requirement_id,file.firm_id));
  }
  await env.DB.batch(updates);
  if(data.status==="infected")await env.FILES.delete(file.storage_key);
