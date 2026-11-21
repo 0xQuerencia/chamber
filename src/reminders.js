@@ -1,5 +1,6 @@
 import {dayGap,normalizeReminderRule,reminderStage,quietHoursActive,validClock,validDay} from "./reminder-policy.js";
 import {shiftCalendarDays} from "./domain.js";
+import {clientScope,canReadClient} from "./permissions.js";
 
 const asIST=(clock=new Date())=>{
  const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(clock);
@@ -90,6 +91,7 @@ export async function handleReminderApi(request,env,user,deps){
   return output({config:{...cadence,enabled,quiet_start:start,quiet_end:end},delivery_enabled:false});
  }
  if(path==="/api/reminders/refresh"&&method==="POST"){
+  if(user.role!=="principal")return fail("Only principal may refresh firm-wide reminders",403);
   const result=await refreshReminderSuggestions(db,asIST(),firm);
   return output({result,delivery_enabled:false});
  }
@@ -97,13 +99,14 @@ export async function handleReminderApi(request,env,user,deps){
   const status=url.searchParams.get("status")||"pending";
   if(!["pending","prepared","resolved","dismissed"].includes(status))return fail("Invalid suggestion status");
   const page=Math.max(0,Math.min(99,Math.floor(Number(url.searchParams.get("page"))||0))),size=50;
+  const scope=clientScope(user,"c");
   const [total,items]=await Promise.all([
-   db.prepare("SELECT COUNT(*) AS n FROM reminder_suggestions WHERE firm_id=? AND status=?").bind(firm,status).first(),
+   db.prepare("SELECT COUNT(*) AS n FROM reminder_suggestions s JOIN clients c ON c.id=s.client_id AND c.firm_id=s.firm_id WHERE s.firm_id=? AND s.status=? AND "+scope.sql).bind(firm,status,...scope.args).first(),
    db.prepare("SELECT s.id,s.client_id,c.name AS client_name,c.code AS client_code,s.period,s.stage,s.due_date,s.missing_count,s.status,s.prepared_batch_id,s.created_at,p.paused_until "+
     "FROM reminder_suggestions s JOIN clients c ON c.id=s.client_id AND c.firm_id=s.firm_id "+
     "LEFT JOIN reminder_client_pauses p ON p.firm_id=s.firm_id AND p.client_id=s.client_id "+
-    "WHERE s.firm_id=? AND s.status=? ORDER BY s.due_date ASC,s.created_at DESC LIMIT ? OFFSET ?")
-    .bind(firm,status,size,page*size).all()
+    "WHERE s.firm_id=? AND s.status=? AND "+scope.sql+" ORDER BY s.due_date ASC,s.created_at DESC LIMIT ? OFFSET ?")
+    .bind(firm,status,...scope.args,size,page*size).all()
   ]);
   return output({items:items.results,total:Number(total.n),page,delivery_enabled:false});
  }
@@ -111,7 +114,7 @@ export async function handleReminderApi(request,env,user,deps){
  if(pause&&method==="POST"){
   const cid=pause[1],action=pause[2];
   const exists=await db.prepare("SELECT id FROM clients WHERE firm_id=? AND id=? AND archived_at IS NULL").bind(firm,cid).first();
-  if(!exists)return fail("Client not found",404);
+  if(!exists||!(await canReadClient(db,user,cid)))return fail("Client not found",404);
   if(action==="resume"){
    await db.batch([
     db.prepare("DELETE FROM reminder_client_pauses WHERE firm_id=? AND client_id=?").bind(firm,cid),
@@ -132,13 +135,13 @@ export async function handleReminderApi(request,env,user,deps){
  const item=path.match(/^\/api\/reminders\/([a-f0-9-]+)\/(dismiss|prepared)$/);
  if(item&&method==="POST"){
   const row=await db.prepare("SELECT id,status,client_id FROM reminder_suggestions WHERE firm_id=? AND id=?").bind(firm,item[1]).first();
-  if(!row)return fail("Suggestion not found",404);
+  if(!row||!(await canReadClient(db,user,row.client_id)))return fail("Suggestion not found",404);
   if(row.status!=="pending")return fail("Only pending suggestions can be changed",409);
   const data=await bodyJSON(request),action=item[2];
   if(action==="prepared"){
    const batchId=clean(data.batch_id,100);
-   const proof=await db.prepare("SELECT m.id FROM messages m JOIN message_batches b ON b.id=m.batch_id AND b.firm_id=m.firm_id WHERE m.firm_id=? AND m.batch_id=? AND m.client_id=? AND b.status='draft' LIMIT 1")
-    .bind(firm,batchId,row.client_id).first();
+   const proof=await db.prepare("SELECT m.id FROM messages m JOIN message_batches b ON b.id=m.batch_id AND b.firm_id=m.firm_id WHERE m.firm_id=? AND m.batch_id=? AND m.client_id=? AND b.status='draft' "+(user.role==="manager"?"AND b.created_by=? ":"")+"LIMIT 1")
+    .bind(...(user.role==="manager"?[firm,batchId,row.client_id,user.id]:[firm,batchId,row.client_id])).first();
    if(!proof)return fail("No matching draft batch for this client",400);
    await db.batch([
     db.prepare("UPDATE reminder_suggestions SET status='prepared',prepared_batch_id=?,updated_at=? WHERE firm_id=? AND id=?")
