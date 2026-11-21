@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Plus, RefreshCw, Settings, Users, X } from "lucide-react";
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
-import ErpDesk from "./ErpDesk";
+import {TallyGateway,TallyDataGrid,TallyTaskRegister} from "./TallyWorkspace";
 import DataTracker from "./Tracker";
 import ClientProfile from "./ClientProfile";
 import WorkBoard from "./WorkBoard";
@@ -91,6 +91,10 @@ export default function App(){
  const [mfaPending,setMfaPending]=useState<{challenge:string;enrollmentRequired:boolean;deviceLabel:string}|null>(null);
  const [workspace,setWorkspace]=useState<Workspace|null>(null);
  const [preview,setPreview]=useState(false);
+ const [shownDate,setShownDate]=useState(new Date().toISOString().slice(0,10));
+ const [datePickerOpen,setDatePickerOpen]=useState(false);
+ const [firmPickerOpen,setFirmPickerOpen]=useState(false);
+ const [expandedTracker,setExpandedTracker]=useState(false);
  const [view,setView]=useState<View>("desk");
  const [workFilter,setWorkFilter]=useState<WorkFilter>("all");
  const [query,setQuery]=useState("");
@@ -125,20 +129,20 @@ export default function App(){
   void getSession().then(async s=>{if(!alive)return;setSession(s);if(s.authenticated){const d=await getWorkspace();if(alive){setWorkspace(d);setLoadedAt(new Date().toLocaleString("en-IN"))}}}).catch(e=>{if(alive){setError(String(e));setSession({authenticated:false,needs_setup:false,user:null})}});
   return()=>{alive=false};
  },[enterPreview]);
- const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false)},[]);
+ const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false);setExpandedTracker(false)},[]);
  useEffect(()=>{
   const handler=(e:KeyboardEvent)=>{
    if(!workspace)return;
    if(keyboardHelpOpen)return;
    if(e.key==="Escape"){
-    if(modal||selected||commandOpen||mobileNavOpen){setModal(null);setSelected(null);setCommandOpen(false);setMobileNavOpen(false)}
+    if(modal||selected||commandOpen||mobileNavOpen||datePickerOpen||firmPickerOpen){setModal(null);setSelected(null);setCommandOpen(false);setMobileNavOpen(false);setDatePickerOpen(false);setFirmPickerOpen(false)}
     else navigate("desk");
     goKeyAt.current=0;return;
    }
    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){
     e.preventDefault();if(!modal)setCommandOpen(true);return;
    }
-   if(modal||commandOpen||isTextInteraction(e.target))return;
+   if(modal||commandOpen||datePickerOpen||firmPickerOpen||isTextInteraction(e.target))return;
    if(e.key==="?"){e.preventDefault();setKeyboardHelpOpen(true);goKeyAt.current=0;return}
    if(e.key==="/"){
     e.preventDefault();
@@ -155,13 +159,17 @@ export default function App(){
     if(key==="g"){e.preventDefault();goKeyAt.current=Date.now();return}
     goKeyAt.current=0;
    }
+   if(e.altKey&&e.key.toLowerCase()==="g"){e.preventDefault();setCommandOpen(true);return}
+   if(e.key==="F1"||e.key==="F11"){e.preventDefault();setKeyboardHelpOpen(true);return}
+   if(e.key==="F2"){e.preventDefault();setDatePickerOpen(true);return}
+   if(e.key==="F3"){e.preventDefault();setFirmPickerOpen(true);return}
    if(e.altKey&&e.key.toLowerCase()==="n"){e.preventDefault();if(!preview&&privileged)setModal("task");return}
    if(e.altKey&&e.key.toLowerCase()==="c"){e.preventDefault();if(!preview&&privileged)setModal("client");return}
-   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance",F8:"tracker",F9:"board"};
+   const pages:Record<string,View>={F4:"clients",F5:"work",F6:"documents",F7:"requests",F8:"tracker",F9:"board",F10:"desk",F12:"settings"};
    if(pages[e.key]){e.preventDefault();navigate(pages[e.key])}
   };
   document.addEventListener("keydown",handler);return()=>document.removeEventListener("keydown",handler);
- },[workspace,navigate,preview,privileged,keyboardHelpOpen,modal,selected,commandOpen,mobileNavOpen]);
+ },[workspace,navigate,preview,privileged,keyboardHelpOpen,modal,selected,commandOpen,mobileNavOpen,datePickerOpen,firmPickerOpen]);
  const mutate=async(action:()=>Promise<unknown>,message="Record saved.")=>{
   if(preview){flash("Read-only preview: changes are disabled.");return}
   setBusy(true);setError("");
@@ -249,12 +257,7 @@ export default function App(){
  ];
  function registerSearch(placeholder:string){return <input id="register-search" className="search" aria-label={placeholder} value={query} onChange={e=>setQuery(e.target.value)} placeholder={placeholder}/>}
  function previewBanner(){return preview?<div className="notice" style={{marginBottom:18}}>SAMPLE PREVIEW · Fictional records. All mutations, exports and messages are disabled. <button className="text-button" onClick={()=>window.location.assign("/")}>Exit preview</button></div>:null}
- function showDesk(){
-  return <>{previewBanner()}<ErpDesk data={workspace!} today={today}
-    onNavigate={(page,filter)=>{navigate(page);if(filter)setWorkFilter(filter)}}
-    onTask={id=>{navigate("work");setSelected(id)}}
-    onDocument={id=>{navigate("documents");setSelected(id)}}/></>;
- }
+ function showDesk(){return <TallyGateway workspace={workspace!} onNavigate={navigate} preview={preview}/>;}
  function showWork(){
   const options:[WorkFilter,string][]=[["all","All work"],["mine","Assigned to me"],["todo","Pending"],["waiting","Waiting"],["review","In review"],["overdue","Overdue"],["done","Completed"]];
   const detail=workspace!.tasks.find(t=>t.id===selected);
@@ -364,7 +367,7 @@ export default function App(){
    </>;
   }
  let page:ReactNode=null;
- if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
+ if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<TallyTaskRegister workspace={workspace} onNavigate={navigate} preview={preview} onOpen={t=>{navigate("work");setSelected(t.id)}}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=expandedTracker?<DataTracker workspace={workspace} preview={preview}/>:<TallyDataGrid workspace={workspace} preview={preview} onNavigate={navigate} onOpenRecord={()=>setExpandedTracker(true)}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  const portalToken=typeof window==="undefined"?null:window.location.hash.match(/^#\/portal\/([0-9a-f]{64})$/)?.[1];
  if(portalToken)return <ClientPortal token={portalToken}/>;
