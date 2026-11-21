@@ -2,7 +2,7 @@ export type Role="principal"|"manager"|"staff";
 export type Priority="low"|"medium"|"high";
 export type TaskStatus="todo"|"in_progress"|"waiting"|"blocked"|"review"|"done";
 export type DocumentStatus="missing"|"requested"|"received"|"verified"|"rejected"|"not_applicable";
-export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"reminders"|"insights"|"compliance"|"team"|"reports"|"activity"|"settings";
+export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"reminders"|"insights"|"compliance"|"team"|"reports"|"activity"|"security"|"settings";
 export type WorkFilter="all"|"mine"|"overdue"|TaskStatus;
 export interface Member {id:string;name:string;email:string;role:Role;active?:number}
 export interface Client {id:string;name:string;category:string;email:string|null;phone:string|null;pan:string|null;gstin:string|null;notes?:string|null;created_at:string;updated_at?:string;code?:string|null;client_group?:string|null;manager_id?:string|null}
@@ -70,3 +70,6 @@ export interface ReminderFeed {items:ReminderItem[];total:number;page:number;del
 
 export type LoginResult={ok:true}|{requires_mfa:true;enrollment_required:boolean;challenge:string;expires_in_seconds:number};
 export interface MfaEnrollment {secret:string;otpauth_uri:string;expires_in_seconds:number}
+
+export interface SecurityEvent {id:string;at:string;event:string;entity_type:string;entity_id:string;actor_name:string|null;actor_role:string|null;details:Record<string,unknown>}
+export interface SecurityFeed {events:SecurityEvent[];total:number;page:number;limit:number}
