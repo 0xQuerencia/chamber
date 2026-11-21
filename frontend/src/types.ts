@@ -2,7 +2,7 @@ export type Role="principal"|"manager"|"staff";
 export type Priority="low"|"medium"|"high";
 export type TaskStatus="todo"|"in_progress"|"waiting"|"blocked"|"review"|"done";
 export type DocumentStatus="missing"|"requested"|"received"|"verified"|"rejected"|"not_applicable";
-export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"compliance"|"team"|"reports"|"activity"|"settings";
+export type View="desk"|"work"|"clients"|"documents"|"tracker"|"board"|"myday"|"import"|"requests"|"compliance"|"team"|"reports"|"activity"|"settings";
 export type WorkFilter="all"|"mine"|"overdue"|TaskStatus;
 export interface Member {id:string;name:string;email:string;role:Role;active?:number}
 export interface Client {id:string;name:string;category:string;email:string|null;phone:string|null;pan:string|null;gstin:string|null;notes?:string|null;created_at:string;updated_at?:string;code?:string|null;client_group?:string|null;manager_id?:string|null}
@@ -38,3 +38,10 @@ export interface ImportClientRow {source_index:number;code?:string;name:string;c
 export interface ImportRowIssue {index:number;errors:string[]}
 export interface ImportPreview {accepted:number;rejected:number;rows:ImportRowIssue[]}
 export interface ImportCommitResult {accepted:number;rejected:ImportRowIssue[];already:number}
+
+export type MessageChannel="email"|"whatsapp";
+export interface MessagePreviewItem {client_id:string;client_name:string;eligible:boolean;reason:string|null;recipient:string|null;contact_id:string|null;missing_count:number;body:string}
+export interface MessagePreview {channel:MessageChannel;period:string;previews:MessagePreviewItem[];eligible:number;skipped:number}
+export interface MessageBatch {id:string;channel:MessageChannel;period:string;status:string;recipient_count:number;created_at?:string}
+export interface MessageBatchDetail {batch:MessageBatch;messages:Array<{id:string;client_id:string;client_name:string;recipient:string;body:string;status:string;error:string|null}>;delivery_enabled:boolean}
+export interface MessageTemplate {id:string;name:string;channel:MessageChannel;category:string;body:string;approval_status:string;active:number}
