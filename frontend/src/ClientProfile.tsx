@@ -37,8 +37,8 @@ export default function ClientProfile({client,workspace,privileged,preview,onRef
  async function transact(action:()=>Promise<unknown>,text:string){
   setBusy(true);setError("");setMessage("");
   try{
-   await action();setMessage(text);setForm("none");setRevision(i=>i+1);await onRefresh();
-  }catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy(false)}
+   await action();setMessage(text);setForm("none");setRevision(i=>i+1);await onRefresh();return true;
+  }catch(e){setError(e instanceof Error?e.message:String(e));return false}finally{setBusy(false)}
  }
  function fields(e:FormEvent<HTMLFormElement>){return Object.fromEntries(new FormData(e.currentTarget)) as Record<string,string>}
  async function saveEdit(e:FormEvent<HTMLFormElement>){
@@ -57,8 +57,7 @@ export default function ClientProfile({client,workspace,privileged,preview,onRef
  }
  async function doArchive(){
   if(!privileged||preview||!window.confirm("Archive this client? Open tasks must be completed first."))return;
-  await transact(()=>archiveClient(client.id),"Client archived.");
-  onClose();
+  if(await transact(()=>archiveClient(client.id),"Client archived."))onClose();
  }
  return <aside className="detail-card client-profile" aria-label={"Client profile: "+client.name}>
   <div className="detail-head"><div><p className="hint">CLIENT MASTER</p><h2>{data.name}</h2><p className="muted small">{data.code??"No client code"} · {data.category}</p></div>
