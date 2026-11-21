@@ -17,6 +17,8 @@ import {handleOnboarding} from "./onboarding.js";
 import {handleDelivery,drainDeliveryQueue} from "./delivery.js";
 import {handleWhatsAppWebhook} from "./delivery-webhooks.js";
 import {handlePortalLinks,handlePublicPortal,handlePortalNotifications} from "./portal.js";
+import {handleCompliance} from "./compliance.js";
+import {planningRule} from "./compliance-domain.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
@@ -363,11 +365,22 @@ async function handleEnroll(data,env,user){
 async function generatePeriod(db,ym,firmId=null,actorId=null) {
   if(!calendarPeriod(ym,"monthly"))throw Error("Invalid work period");
   const query=firmId
-    ?db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.firm_id=? AND e.active=1 AND t.active=1 LIMIT 2000").bind(firmId)
-    :db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.active=1 AND t.active=1 LIMIT 2000");
+    ?db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days,t.due_shift,t.verified_at,t.starter_code FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.firm_id=? AND e.active=1 AND t.active=1 AND (t.starter_code IS NULL OR t.verified_at IS NOT NULL) LIMIT 2000").bind(firmId)
+    :db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days,t.due_shift,t.verified_at,t.starter_code FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.active=1 AND t.active=1 AND (t.starter_code IS NULL OR t.verified_at IS NOT NULL) LIMIT 2000");
   const records=(await query.all()).results;
   let created=0,already=0;
-  const requirementCache=new Map();
+  const requirementCache=new Map(),calendarCache=new Map();
+  async function calendarFor(firm){
+    if(!calendarCache.has(firm)){
+      const [profile,holidays]=await Promise.all([
+       db.prepare("SELECT working_days FROM firm_profiles WHERE firm_id=?").bind(firm).first(),
+       db.prepare("SELECT date FROM compliance_holidays WHERE firm_id=?").bind(firm).all()
+      ]);
+      calendarCache.set(firm,{working:profile?JSON.parse(profile.working_days):[1,2,3,4,5,6],
+        holidays:holidays.results.map(h=>h.date)});
+    }
+    return calendarCache.get(firm);
+  }
   for(const row of records) {
     const period=calendarPeriod(ym,row.frequency);
     const exists=await db.prepare("SELECT id FROM recurrence_runs WHERE firm_id=? AND template_id=? AND client_id=? AND period=?").bind(row.firm_id,row.template_id,row.client_id,period).first();
@@ -375,7 +388,8 @@ async function generatePeriod(db,ym,firmId=null,actorId=null) {
     const taskId=id(),at=iso();
     const override=await db.prepare("SELECT new_due_date FROM due_date_overrides WHERE firm_id=? AND template_id=? AND period=?")
       .bind(row.firm_id,row.template_id,period).first();
-    const due=override?.new_due_date||plannedDueDate(ym,row.frequency,row.due_day);
+    const calendar=await calendarFor(row.firm_id);
+    const due=override?.new_due_date||planningRule(plannedDueDate(ym,row.frequency,row.due_day),row,calendar.working,calendar.holidays);
     const askBy=shiftCalendarDays(due,-Number(row.ask_by_lead_days));
     const cacheKey=row.firm_id+":"+row.template_id;
     if(!requirementCache.has(cacheKey)) {
@@ -455,6 +469,7 @@ async function api(request,env) {
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
     if(path.startsWith("/api/security/"))return handleSecurity(request,env,user,{output,fail,clean});
     if(path==="/api/onboarding"||path==="/api/onboarding/profile")return handleOnboarding(request,env,user,{output,fail,clean,audit,iso,bodyJSON,validEmail});
+    if(path.startsWith("/api/compliance/"))return handleCompliance(request,env,user,{output,fail,clean,bodyJSON,audit,id,iso});
     if(path==="/api/portal/links"||/^\/api\/portal\/links\/[a-f0-9-]+\/revoke$/.test(path))
       return handlePortalLinks(request,env,user,{output,fail,clean,audit,bodyJSON});
     if(path==="/api/notifications"||/^\/api\/notifications\/[a-f0-9-]+\/read$/.test(path))
@@ -525,7 +540,8 @@ export default {
       return;
     }
     const now=new Date();
-    const months=[0,1,2].map(i=>new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+i,1)).toISOString().slice(0,7));
+    // Look ahead more than 60 days, including monthly assignments due in the next month.
+    const months=[0,1,2,3].map(i=>new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+i,1)).toISOString().slice(0,7));
     ctx.waitUntil((async()=>{
       for(const month of months)await generatePeriod(env.DB,month);
       await refreshReminderSuggestions(env.DB);

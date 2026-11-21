@@ -1,7 +1,7 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed,OnboardingStatus,FirmProfile,DeliveryReadiness,QueuedSend,PortalLinkRecord,CreatedPortalLink,PortalChecklist,PortalNotification} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus,LoginResult,MfaEnrollment,SecurityFeed,OnboardingStatus,FirmProfile,DeliveryReadiness,QueuedSend,PortalLinkRecord,CreatedPortalLink,PortalChecklist,PortalNotification,ComplianceStarter,ComplianceCalendar,DueShift} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
-export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
+export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"|"DELETE"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
  const headers=new Headers(extra);if(data!==undefined)headers.set("Content-Type","application/json");
  const response=await fetch(path,{method,headers,credentials:"same-origin",body:data===undefined?undefined:JSON.stringify(data)});
  const result:unknown=await response.json().catch(()=>({}));
@@ -118,3 +118,14 @@ export async function uploadPortalFile(token:string,access:string,requirementId:
  if(!response.ok)throw new ApiError(typeof result.error==="string"?result.error:"File upload failed",response.status);
  return result;
 }
+
+export const getStarterServices=()=>api<{starters:ComplianceStarter[];notice:string}>("/api/compliance/starters");
+export const installStarterServices=(codes:string[])=>api<{results:Array<{code:string;id:string;created:boolean}>;notice:string}>("/api/compliance/starters/install","POST",{codes});
+export const getComplianceCalendar=()=>api<ComplianceCalendar>("/api/compliance/calendar");
+export const saveComplianceRule=(id:string,dueDay:number,dueShift:DueShift,askByLead:number,sourceReference:string,markVerified:boolean)=>
+ api<{ok:boolean;existing_tasks_unchanged:boolean}>("/api/compliance/templates/"+encodeURIComponent(id),"PUT",{
+  due_day:dueDay,due_shift:dueShift,ask_by_lead_days:askByLead,source_reference:sourceReference,mark_verified:markVerified
+ });
+export const addComplianceHoliday=(date:string,name:string)=>api<{id:string}>("/api/compliance/holidays","POST",{date,name});
+export const deleteComplianceHoliday=(id:string)=>api<{ok:boolean}>("/api/compliance/holidays/"+encodeURIComponent(id),"DELETE");
+export const previewComplianceShift=(dueDate:string,shift:DueShift)=>api<{original:string;adjusted:string;shift:DueShift;warning:string}>("/api/compliance/preview","POST",{due_date:dueDate,due_shift:shift});

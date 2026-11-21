@@ -93,3 +93,7 @@ export interface PortalLinkRecord {id:string;period:string;recipient_email:strin
 export interface CreatedPortalLink {id:string;url:string;recipient_email:string;expires_at:string;warning:string}
 export interface PortalChecklist {client_name:string;period:string;requirements:Array<{id:string;name:string;status:string;received_at:string|null}>;upload_limit_bytes:number;notice:string}
 export interface PortalNotification {id:string;client_id:string;task_id:string;message:string;created_at:string;read_at:string|null}
+
+export interface ComplianceStarter {code:string;name:string;service:string;frequency:"monthly"|"quarterly"|"annual";day:number;lead:number;requirements:string[];installed:boolean}
+export type DueShift="none"|"previous_workday"|"next_workday";
+export interface ComplianceCalendar {timezone:string;working_days:number[];holidays:Array<{id:string;date:string;name:string}>;templates:Array<{id:string;name:string;service:string;frequency:string;due_day:number;ask_by_lead_days:number;due_shift:DueShift;source_reference:string|null;verified_at:string|null;starter_code:string|null}>}

@@ -395,6 +395,44 @@ const portalNotConfigured=await call("/api/portal/links","POST",{
 assert.equal(portalNotConfigured.res.status,503);
 const portalStaffDenied=await call("/api/portal/links","POST",{client_id:clientA.id,period:"2026-12"},staffCookie);
 assert.equal(portalStaffDenied.res.status,403);
+const compliancePack=ok(await call("/api/compliance/starters"));
+assert.ok(compliancePack.starters.length>=9);
+const unauthorizedStarter=await call("/api/compliance/starters/install","POST",{codes:["gstr3b_monthly"]},staffCookie);
+assert.equal(unauthorizedStarter.res.status,403);
+const installed=ok(await call("/api/compliance/starters/install","POST",{codes:["gstr3b_monthly"]}));
+assert.equal(installed.results.length,1);
+assert.equal(installed.results[0].created,true);
+const secondInstall=ok(await call("/api/compliance/starters/install","POST",{codes:["gstr3b_monthly"]}));
+assert.equal(secondInstall.results[0].created,false);
+const starterId=installed.results[0].id;
+const cal=ok(await call("/api/compliance/calendar"));
+assert.equal(cal.templates.find(t=>t.id===starterId).verified_at,null);
+assert.equal(cal.templates.find(t=>t.id===starterId).due_shift,"none");
+ok(await call("/api/enrollments","POST",{client_id:clientA.id,template_id:starterId,assignee_id:staff.id}));
+const beforeVerification=ok(await call("/api/recurrence","POST",{period:"2026-11"}));
+assert.equal(beforeVerification.created,0,"Unverified starter must never automatically schedule compliance work");
+const holiday=ok(await call("/api/compliance/holidays","POST",{date:"2026-12-19",name:"Firm planning holiday"}));
+assert.ok(holiday.id);
+const shifted=ok(await call("/api/compliance/preview","POST",{due_date:"2026-12-20",due_shift:"previous_workday"}));
+assert.equal(shifted.adjusted,"2026-12-18");
+const withoutSource=await call("/api/compliance/templates/"+starterId,"PUT",{
+ due_day:20,due_shift:"previous_workday",ask_by_lead_days:10,source_reference:"",mark_verified:true
+});
+assert.equal(withoutSource.res.status,400);
+ok(await call("/api/compliance/templates/"+starterId,"PUT",{
+ due_day:20,due_shift:"previous_workday",ask_by_lead_days:10,
+ source_reference:"Official notice checked by principal for the test category",mark_verified:true
+}));
+const afterVerification=ok(await call("/api/recurrence","POST",{period:"2026-11"}));
+assert.equal(afterVerification.created,1);
+snap=ok(await call("/api/bootstrap"));
+const generatedGst=snap.tasks.find(t=>t.client_id===clientA.id&&t.title==="GSTR-3B monthly"&&t.period==="2026-11");
+assert.ok(generatedGst);
+assert.equal(generatedGst.due_date,"2026-12-18");
+assert.equal(generatedGst.ask_by_date,"2026-12-08");
+assert.ok(snap.documents.some(d=>d.task_id===generatedGst.id&&d.name==="ITC reconciliation"));
+const holidayRemove=await call("/api/compliance/holidays/"+holiday.id,"DELETE");
+assert.equal(holidayRemove.res.status,200);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");
