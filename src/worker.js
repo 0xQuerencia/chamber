@@ -1,4 +1,6 @@
 import { clean, validEmail, safeStatus, statusForRole, csvCell } from "./validation.js";
+import { validCalendarDate, shiftCalendarDays } from "./domain.js";
+import { handleWorkflow } from "./tracker.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
@@ -119,7 +121,7 @@ async function bootstrap(db, user) {
     (privileged
       ? db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id)
       : db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
-    db.prepare("SELECT id,name,service,frequency,due_day,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
+    db.prepare("SELECT id,name,service,frequency,due_day,ask_by_lead_days,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
     (privileged?db.prepare("SELECT * FROM service_enrollments WHERE firm_id=?").bind(user.firm_id):db.prepare("SELECT * FROM service_enrollments WHERE firm_id=? AND assignee_id=?").bind(user.firm_id,user.id)).all()
   ]);
   return output({ firm, user: { id:user.id, name:user.name, email:user.email, role:user.role },
@@ -150,12 +152,14 @@ async function handleCreateTask(data, env, user) {
   const assignee=clean(data.assignee_id,80), reviewer=clean(data.reviewer_id,80);
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee)) || !(await validateFirmUser(env.DB,user.firm_id,reviewer))) return fail("Assignee or reviewer not found in firm");
   const due=clean(data.due_date,10);
-  if (due && !/^\d{4}-\d\d-\d\d$/.test(due)) return fail("Due date must be YYYY-MM-DD");
+  if (due && !validCalendarDate(due)) return fail("Due date must be a valid YYYY-MM-DD calendar date");
   const taskId=id(), at=iso();
   const priority=["low","medium","high"].includes(data.priority)?data.priority:"medium";
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,assignee_id,reviewer_id,priority,status,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(taskId,user.firm_id,clientId,title,service,clean(data.period,60),due||null,assignee||null,reviewer||null,priority,"todo",clean(data.notes,2000),at,at),
+    env.DB.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,ask_by_date,assignee_id,reviewer_id,priority,status,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(taskId,user.firm_id,clientId,title,service,clean(data.period,60),due||null,due?shiftCalendarDays(due,-10):null,assignee||null,reviewer||null,priority,"todo",clean(data.notes,2000),at,at),
+    env.DB.prepare("INSERT INTO task_events(id,firm_id,task_id,actor_id,from_status,to_status,at) VALUES(?,?,?,?,?,?,?)")
+      .bind(id(),user.firm_id,taskId,user.id,null,"todo",at),
     await audit(env.DB,user,"created","task",taskId,{client_id:clientId})
   ]);
   return output({ id:taskId },201);
@@ -174,6 +178,8 @@ async function handleUpdateTask(taskId, data, env, user) {
   await env.DB.batch([
     env.DB.prepare("UPDATE tasks SET status=?,assignee_id=?,notes=?,updated_at=?,completed_at=? WHERE id=? AND firm_id=?")
       .bind(status,assignee||null,notes,at,completed,taskId,user.firm_id),
+    env.DB.prepare("INSERT INTO task_events(id,firm_id,task_id,actor_id,from_status,to_status,note,at) VALUES(?,?,?,?,?,?,?,?)")
+      .bind(id(),user.firm_id,taskId,user.id,previous.status,status,assignee!==previous.assignee_id?"Assignee changed":null,at),
     await audit(env.DB,user,"updated","task",taskId,{from:previous.status,to:status,assignee_changed:assignee!==previous.assignee_id})
   ]);
   return output({ ok:true });
@@ -249,11 +255,12 @@ async function handleCreateTemplate(data,env,user){
   if(!isPrivileged(user))return fail("Insufficient permission",403);
   const name=clean(data.name,120),service=clean(data.service,80),frequency=String(data.frequency||"");
   const day=Number(data.due_day);
-  if(!name||!service||!["monthly","quarterly","annual"].includes(frequency)||!Number.isInteger(day)||day<1||day>28)return fail("Valid name, service, frequency and planning day (1–28) required");
+  const lead=data.ask_by_lead_days===undefined?10:Number(data.ask_by_lead_days);
+  if(!name||!service||!["monthly","quarterly","annual"].includes(frequency)||!Number.isInteger(day)||day<1||day>28||!Number.isInteger(lead)||lead<0||lead>90)return fail("Valid name, service, planning day (1–28) and ask-by lead (0–90) required");
   const templateId=id();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO service_templates(id,firm_id,name,service,frequency,due_day,active,created_at) VALUES (?,?,?,?,?,?,1,?)")
-      .bind(templateId,user.firm_id,name,service,frequency,day,iso()),
+    env.DB.prepare("INSERT INTO service_templates(id,firm_id,name,service,frequency,due_day,ask_by_lead_days,active,created_at) VALUES (?,?,?,?,?,?,?,1,?)")
+      .bind(templateId,user.firm_id,name,service,frequency,day,lead,iso()),
     await audit(env.DB,user,"created","template",templateId,{frequency})
   ]);
   return output({id:templateId},201);
@@ -277,23 +284,39 @@ async function handleEnroll(data,env,user){
 async function generatePeriod(db,ym,firmId=null,actorId=null) {
   if(!calendarPeriod(ym,"monthly"))throw Error("Invalid work period");
   const query=firmId
-    ?db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.firm_id=? AND e.active=1 AND t.active=1 LIMIT 2000").bind(firmId)
-    :db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.active=1 AND t.active=1 LIMIT 2000");
+    ?db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.firm_id=? AND e.active=1 AND t.active=1 LIMIT 2000").bind(firmId)
+    :db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.active=1 AND t.active=1 LIMIT 2000");
   const records=(await query.all()).results;
   let created=0,already=0;
+  const requirementCache=new Map();
   for(const row of records) {
     const period=calendarPeriod(ym,row.frequency);
     const exists=await db.prepare("SELECT id FROM recurrence_runs WHERE firm_id=? AND template_id=? AND client_id=? AND period=?").bind(row.firm_id,row.template_id,row.client_id,period).first();
     if(exists){already++;continue;}
-    const taskId=id(),at=iso(),due=plannedDueDate(ym,row.frequency,row.due_day);
+    const taskId=id(),at=iso();
+    const override=await db.prepare("SELECT new_due_date FROM due_date_overrides WHERE firm_id=? AND template_id=? AND period=?")
+      .bind(row.firm_id,row.template_id,period).first();
+    const due=override?.new_due_date||plannedDueDate(ym,row.frequency,row.due_day);
+    const askBy=shiftCalendarDays(due,-Number(row.ask_by_lead_days));
+    const cacheKey=row.firm_id+":"+row.template_id;
+    if(!requirementCache.has(cacheKey)) {
+      const result=await db.prepare("SELECT id,name FROM requirement_templates WHERE firm_id=? AND template_id=? AND required=1 ORDER BY sort_order,id")
+        .bind(row.firm_id,row.template_id).all();
+      requirementCache.set(cacheKey,result.results);
+    }
+    const checklist=requirementCache.get(cacheKey);
     try {
       await db.batch([
-        db.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,assignee_id,priority,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
-          .bind(taskId,row.firm_id,row.client_id,row.name,row.service,period,due,row.assignee_id||null,"medium","todo","Planning date only; verify statutory filing dates separately.",at,at),
+        db.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,ask_by_date,assignee_id,priority,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(taskId,row.firm_id,row.client_id,row.name,row.service,period,due,askBy,row.assignee_id||null,"medium","todo","Planning date only; verify statutory filing dates separately.",at,at),
         db.prepare("INSERT INTO recurrence_runs(id,firm_id,template_id,client_id,period,task_id,created_at) VALUES (?,?,?,?,?,?,?)")
           .bind(id(),row.firm_id,row.template_id,row.client_id,period,taskId,at),
+        db.prepare("INSERT INTO task_events(id,firm_id,task_id,actor_id,from_status,to_status,at) VALUES(?,?,?,?,?,?,?)")
+          .bind(id(),row.firm_id,taskId,actorId||null,null,"todo",at),
+        ...checklist.map(req=>db.prepare("INSERT INTO documents(id,firm_id,task_id,client_id,name,status,requirement_template_id,created_at,updated_at) VALUES(?,?,?,?,?,'missing',?,?,?)")
+          .bind(id(),row.firm_id,taskId,row.client_id,req.name,req.id,at,at)),
         db.prepare("INSERT INTO activity(id,firm_id,actor_id,event,entity_type,entity_id,details,at) VALUES (?,?,?,?,?,?,?,?)")
-          .bind(id(),row.firm_id,actorId||null,actorId?"generated":"system_generated","task",taskId,JSON.stringify({period,template_id:row.template_id}),at)
+          .bind(id(),row.firm_id,actorId||null,actorId?"generated":"system_generated","task",taskId,JSON.stringify({period,template_id:row.template_id,items:checklist.length}),at)
       ]);
       created++;
     }catch(error){
@@ -357,6 +380,9 @@ async function api(request,env) {
     if(path==="/api/enrollments"&&method==="POST") return handleEnroll(await bodyJSON(request),env,user);
     if(path==="/api/recurrence"&&method==="POST") return handleGenerate(await bodyJSON(request),env,user);
     if(path==="/api/export"&&method==="GET") return handleExport(request,env,user);
+    if(["/api/requirements","/api/overrides","/api/tracker","/api/tracker/detail","/api/inward"].includes(path) ||
+       /^\/api\/tasks\/[a-f0-9-]+\/history$/.test(path))
+      return handleWorkflow(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON});
     const taskMatch=path.match(/^\/api\/tasks\/([a-f0-9-]+)$/);
     if(taskMatch&&method==="PATCH") return handleUpdateTask(taskMatch[1],await bodyJSON(request),env,user);
     const docMatch=path.match(/^\/api\/documents\/([a-f0-9-]+)$/);
@@ -371,7 +397,10 @@ async function api(request,env) {
 export default {
   async scheduled(controller,env,ctx) {
     if(!env.DB)return;
-    ctx.waitUntil(generatePeriod(env.DB,new Date().toISOString().slice(0,7)).catch(error=>console.error("Chamber recurrence failure",error.message)));
+    const now=new Date();
+    const months=[0,1,2].map(i=>new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+i,1)).toISOString().slice(0,7));
+    ctx.waitUntil((async()=>{for(const month of months)await generatePeriod(env.DB,month)})()
+      .catch(error=>console.error("Chamber recurrence failure",error.message)));
   },
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
