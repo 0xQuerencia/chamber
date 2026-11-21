@@ -150,6 +150,29 @@ assert.equal(duplicateClient.res.status,409);
 ok(await call("/api/clients/"+clientB.id+"/archive","POST",{}));
 snap=ok(await call("/api/bootstrap"));
 assert.equal(snap.clients.some(c=>c.id===clientB.id),false);
+const importBatch=ok(await call("/api/imports","POST",{kind:"clients"}));
+const clientRows=[
+ {source_index:2,name:"Imported Account",code:"CL-IMPORT",email:"imported@example.test",category:"Business"},
+ {source_index:3,name:"Invalid Client",pan:"NOTVALID"}
+];
+const preflight=ok(await call("/api/imports/validate","POST",{rows:clientRows}));
+assert.equal(preflight.accepted,1);
+assert.equal(preflight.rejected,1);
+const imported=ok(await call("/api/imports/"+importBatch.id+"/rows","POST",{rows:clientRows}));
+assert.equal(imported.accepted,1);
+assert.equal(imported.rejected.length,1);
+const repeat=ok(await call("/api/imports/"+importBatch.id+"/rows","POST",{rows:clientRows}));
+assert.equal(repeat.already,1);
+const completedImport=ok(await call("/api/imports/"+importBatch.id+"/complete","POST",{}));
+assert.equal(completedImport.imported,1);
+const errorReport=await call("/api/imports/"+importBatch.id+"/errors");
+assert.equal(errorReport.res.status,200);
+assert.ok(errorReport.body.includes("Invalid PAN"));
+snap=ok(await call("/api/bootstrap"));
+assert.ok(snap.clients.some(c=>c.code==="CL-IMPORT"));
+ok(await call("/api/imports/"+importBatch.id+"/undo","POST",{}));
+snap=ok(await call("/api/bootstrap"));
+assert.equal(snap.clients.some(c=>c.code==="CL-IMPORT"),false);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");
