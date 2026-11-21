@@ -49,6 +49,9 @@ export async function handleWhatsAppWebhook(request,env){
     const providerId=String(event.id||"");
     const sender=normalizePhone(event.from);
     if(!providerId||!sender)continue;
+    const duplicate=await db.prepare("SELECT id FROM inbound_messages WHERE firm_id=? AND channel='whatsapp' AND provider_message_id=?")
+     .bind(firm,providerId).first();
+    if(duplicate)continue;
     const text=typeof event.text?.body==="string"?event.text.body.slice(0,2000):null;
     const mediaId=String(event.image?.id||event.document?.id||event.audio?.id||"").slice(0,150)||null;
     const contacts=(await db.prepare("SELECT id,client_id,phone FROM client_contacts WHERE firm_id=? AND active=1 AND phone IS NOT NULL")
