@@ -16,3 +16,11 @@ import "./evidence.css";
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
 createRoot(root).render(<React.StrictMode><App /></React.StrictMode>);
+
+if ("serviceWorker" in navigator && window.location.protocol === "https:") {
+ window.addEventListener("load", () => {
+  void navigator.serviceWorker.register("/sw.js").catch(() => {
+   // The application remains usable when the PWA worker is unavailable.
+  });
+ });
+}
