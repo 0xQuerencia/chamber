@@ -13,6 +13,7 @@ import "./devices.css";
 import "./sheets-settings.css";
 import "./evidence.css";
 import "./reminders.css";
+import "./keyboard.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
