@@ -78,7 +78,7 @@ export async function uploadEvidence(requirementId:string,file:File):Promise<{id
 }
 
 export const getReminderConfig=()=>api<{config:ReminderPolicy;delivery_enabled:boolean}>("/api/reminders/config");
-export const saveReminderConfig=(config:ReminderPolicy)=>api<{config:ReminderPolicy;delivery_enabled:boolean}>("/api/reminders/config","PUT",config);
+export const saveReminderConfig=(config:ReminderPolicy)=>api<{config:ReminderPolicy;delivery_enabled:boolean}>("/api/reminders/config","PUT",{...config});
 export const refreshReminders=()=>api<{result:{created:number;already:number;resolved:number;blocked:number;checked:number};delivery_enabled:boolean}>("/api/reminders/refresh","POST",{});
 export const getReminders=(status:ReminderStatus,page=0)=>api<ReminderFeed>("/api/reminders?status="+status+"&page="+page);
 export const pauseClientReminders=(id:string,until:string,reason:string)=>api<{ok:boolean}>("/api/reminders/clients/"+encodeURIComponent(id)+"/pause","POST",{paused_until:until,reason});
