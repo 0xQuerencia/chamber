@@ -10,6 +10,7 @@ import ImportWizard from "./ImportWizard";
 import Composer from "./Composer";
 import Insights from "./Insights";
 import DeviceManager from "./DeviceManager";
+import SheetsSettings from "./SheetsSettings";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
 import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, StatusBadge, type Column } from "./components";
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
@@ -309,6 +310,7 @@ export default function App(){
     }}><LogOut size={15}/> {preview?"Exit preview":"Sign out"}</Button></div>
     </Panel>
     <DeviceManager preview={preview} role={workspace!.user.role}/>
+    <SheetsSettings preview={preview} principal={workspace!.user.role==="principal"}/>
    </>;
   }
  let page:ReactNode=null;

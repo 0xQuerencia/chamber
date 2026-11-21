@@ -6,6 +6,7 @@ import { handleWork } from "./work.js";
 import { handleImports } from "./imports.js";
 import { handleMessages } from "./messages.js";
 import { handleReports } from "./reports.js";
+import { handleSheetSettings, scheduledSheetSync } from "./sheets.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 
 const enc = new TextEncoder();
@@ -432,6 +433,7 @@ async function api(request,env) {
     if(path==="/api/enrollments"&&method==="POST") return handleEnroll(await bodyJSON(request),env,user);
     if(path==="/api/recurrence"&&method==="POST") return handleGenerate(await bodyJSON(request),env,user);
     if(path==="/api/export"&&method==="GET") return handleExport(request,env,user);
+    if(path.startsWith("/api/sheets/"))return handleSheetSettings(request,env,user,{output,fail,clean,audit,id,iso,bodyJSON});
     if(path.startsWith("/api/reports/"))return handleReports(request,env,user,{output,fail,isPrivileged});
     if(path.startsWith("/api/messages/"))
       return handleMessages(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
@@ -456,6 +458,10 @@ async function api(request,env) {
 export default {
   async scheduled(controller,env,ctx) {
     if(!env.DB)return;
+    if(controller.cron==="*/1 * * * *"){
+      ctx.waitUntil(scheduledSheetSync(env).catch(error=>console.error("Chamber Sheets sync failed",error?.message)));
+      return;
+    }
     const now=new Date();
     const months=[0,1,2].map(i=>new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+i,1)).toISOString().slice(0,7));
     ctx.waitUntil((async()=>{for(const month of months)await generatePeriod(env.DB,month)})()
