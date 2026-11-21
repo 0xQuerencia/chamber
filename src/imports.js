@@ -35,7 +35,7 @@ export async function handleImports(request,env,user,deps){
   const seenIndexes=new Set(),seenKeys=new Set();
   for(const raw of input){
    const parsed=readRow(raw),row=parsed.row;
-   const problems=[...parsed.problems],index=row?.source_index??Number(raw?.source_index)||0;
+   const problems=[...parsed.problems],index=row?.source_index??(Number(raw?.source_index)||0);
    if(row){
     if(seenIndexes.has(index))problems.push("Repeated spreadsheet row index");
     seenIndexes.add(index);
