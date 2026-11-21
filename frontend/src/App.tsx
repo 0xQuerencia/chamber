@@ -4,6 +4,7 @@ import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, logi
 import { sampleWorkspace } from "./demo";
 import ErpDesk from "./ErpDesk";
 import DataTracker from "./Tracker";
+import ClientProfile from "./ClientProfile";
 import CommandPalette, { type CommandOption } from "./CommandPalette";
 import { Avatar, Button, Dialog, Empty, Heading, Panel, Register, StatusBadge, type Column } from "./components";
 import type { Client, DocumentStatus, Enrollment, Member, Requirement, Session, Task, TaskStatus, View, WorkFilter, Workspace } from "./types";
@@ -51,7 +52,7 @@ function RecordForm({kind,workspace,onCancel,onSave,busy,error}:{kind:ModalKind;
  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();await onSave(kind,Object.fromEntries(new FormData(e.currentTarget)) as Record<string,string>)}
  let body:ReactNode=null;
  switch(kind){
-  case "client":body=<><Input label="Legal / trading name" name="name" required/><Select label="Client category" name="category" items={[["Business","Business"],["Individual","Individual"],["Partnership","Partnership"],["Company","Company"],["Trust","Trust"]]}/><Input label="Email" name="email" type="email"/><Input label="Phone" name="phone"/><Input label="PAN" name="pan"/><Input label="GSTIN" name="gstin"/><div className="field full"><label>Internal notes</label><textarea name="notes" maxLength={1000}/></div></>;break;
+  case "client":body=<><Input label="Client code (optional)" name="code"/><Input label="Legal / trading name" name="name" required/><Select label="Client category" name="category" items={[["Business","Business"],["Individual","Individual"],["Partnership","Partnership"],["Company","Company"],["Trust","Trust"]]}/><Input label="Client group" name="client_group"/><Input label="Email" name="email" type="email"/><Input label="Phone" name="phone"/><Input label="PAN" name="pan"/><Input label="Primary GSTIN" name="gstin"/><Select label="Client manager" name="manager_id" items={workspace.staff.map(s=>[s.id,s.name])} required={false}/><div className="field full"><label>Internal notes</label><textarea name="notes" maxLength={1000}/></div></>;break;
   case "task":body=<><Select label="Client" name="client_id" items={clients}/><Input label="Work title" name="title" required/><Input label="Service (GST / TDS / Audit)" name="service" required/><Input label="Work period" name="period"/><Input label="Due date" name="due_date" type="date"/><Select label="Assignee" name="assignee_id" items={people} required={false}/><Select label="Priority" name="priority" items={[["medium","Medium"],["high","High"],["low","Low"]]}/><div className="field full"><label>Notes</label><textarea name="notes" maxLength={2000}/></div></>;break;
   case "document":body=<><Select label="Related assignment" name="task_id" items={jobs}/><Input label="Required document" name="name" required/><p className="hint">Document requirements start in Missing state until requested or received.</p></>;break;
   case "staff":body=<><Input label="Full name" name="name" required/><Input label="Work email" name="email" type="email" required/><Select label="Role" name="role" items={[["staff","Article / staff"],["manager","Manager"]]}/><Input label="Initial password (12+ characters)" name="password" type="password" required min="12"/></>;break;
@@ -212,14 +213,17 @@ export default function App(){
   </>;
  }
  function showClients(){
-  const rows=workspace!.clients.filter(c=>[c.name,c.email,c.category,c.pan,c.gstin].join(" ").toLowerCase().includes(query.toLowerCase()));
-  const active=workspace!.clients.find(c=>c.id===selected);
-  return <>{previewBanner()}<Heading title="Client Master" subtitle="Central client records and service history" actions={<>{privileged&&<Button kind="primary" onClick={()=>open("client")}><Plus size={16}/> New client</Button>}<Button onClick={()=>download("clients")}><ArrowDownToLine size={16}/> Export CSV</Button></>}/>
-   <div className="toolbar">{registerSearch("Search client, email, PAN or GSTIN…")}</div><div className={active?"register-with-detail":""}><Register columns={clientCols} rows={rows} empty="No clients yet"/>{active&&<div className="detail-card"><div className="detail-head"><div><h2>{active.name}</h2><StatusBadge status={active.category}/></div><button className="close-button" onClick={()=>setSelected(null)}><X size={18}/></button></div>
-    <div className="detail-kv"><div><label>Email</label><span>{active.email??"—"}</span></div><div><label>Phone</label><span>{active.phone??"—"}</span></div><div><label>PAN</label><span>{active.pan?"••••"+active.pan.slice(-4):"—"}</span></div><div><label>GSTIN</label><span>{active.gstin?"••••"+active.gstin.slice(-4):"—"}</span></div></div>
-    <div className="detail-tabs"><span>Assignments</span></div>{workspace!.tasks.filter(t=>t.client_id===active.id).map(t=><div className="detail-mini" key={t.id}><strong>{t.title}</strong><p>{t.service} · {statusLabel(t.status)} · {formatDate(t.due_date)}</p></div>)}</div>}</div>
-  </>;
- }
+   const rows=workspace!.clients.filter(c=>[c.name,c.code,c.email,c.category,c.pan,c.gstin].join(" ").toLowerCase().includes(query.toLowerCase()));
+   const active=workspace!.clients.find(c=>c.id===selected);
+   return <>{previewBanner()}<Heading title="Client Master" subtitle="Firm clients, registrations, services and contacts" actions={<>{privileged&&<Button kind="primary" onClick={()=>open("client")}><Plus size={16}/> New client</Button>}<Button onClick={()=>download("clients")}><ArrowDownToLine size={16}/> Export CSV</Button></>}/>
+    <div className="toolbar">{registerSearch("Search client, code, email, PAN or GSTIN…")}</div>
+    <div className={active?"register-with-detail":""}>
+     <Register columns={clientCols} rows={rows} empty="No clients yet"/>
+     {active&&<ClientProfile key={active.id} client={active} workspace={workspace!} privileged={privileged} preview={preview}
+      onClose={()=>setSelected(null)} onRefresh={refresh} onTracker={()=>navigate("tracker")}/>}
+    </div>
+   </>;
+  }
  function showDocuments(){
   const rows=workspace!.documents.filter(d=>(docFilter==="all"||d.status===docFilter)&&[d.name,clientName(d.client_id),findTask(d.task_id)?.title].join(" ").toLowerCase().includes(query.toLowerCase()));
   const active=workspace!.documents.find(d=>d.id===selected);

@@ -4,6 +4,7 @@ import App from "./App";
 import "./styles.css";
 import "./classic-erp.css";
 import "./tracker.css";
+import "./client-master.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");

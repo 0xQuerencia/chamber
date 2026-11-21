@@ -1,6 +1,8 @@
 import { clean, validEmail, safeStatus, statusForRole, csvCell } from "./validation.js";
 import { validCalendarDate, shiftCalendarDays } from "./domain.js";
 import { handleWorkflow } from "./tracker.js";
+import { handleClientMaster } from "./clients.js";
+import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
@@ -110,8 +112,8 @@ async function bootstrap(db, user) {
     db.prepare("SELECT id,name FROM firms WHERE id=?").bind(user.firm_id).first(),
     db.prepare("SELECT id,name,email,role,active FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
     (privileged
-      ? db.prepare("SELECT * FROM clients WHERE firm_id=? ORDER BY name").bind(user.firm_id)
-      : db.prepare("SELECT DISTINCT c.id,c.name,c.category,c.email,c.phone,c.created_at,c.updated_at, NULL AS pan,NULL AS gstin,NULL AS notes FROM clients c JOIN tasks t ON c.id=t.client_id WHERE c.firm_id=? AND t.firm_id=? AND t.assignee_id=? ORDER BY c.name").bind(user.firm_id,user.firm_id,user.id)).all(),
+      ? db.prepare("SELECT * FROM clients WHERE firm_id=? AND archived_at IS NULL ORDER BY name").bind(user.firm_id)
+      : db.prepare("SELECT DISTINCT c.id,c.name,c.category,c.email,c.phone,c.created_at,c.updated_at, NULL AS pan,NULL AS gstin,NULL AS notes FROM clients c JOIN tasks t ON c.id=t.client_id WHERE c.firm_id=? AND c.archived_at IS NULL AND t.firm_id=? AND t.assignee_id=? ORDER BY c.name").bind(user.firm_id,user.firm_id,user.id)).all(),
     (privileged
       ? db.prepare("SELECT * FROM tasks WHERE firm_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id)
       : db.prepare("SELECT * FROM tasks WHERE firm_id=? AND assignee_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id,user.id)).all(),
@@ -136,12 +138,21 @@ async function validateFirmUser(db, firmId, userId) {
 }
 async function handleCreateClient(data, env, user) {
   if (!isPrivileged(user)) return fail("Insufficient permission",403);
-  const name = clean(data.name, 150), email = clean(data.email, 200), category = clean(data.category || "Business", 50);
-  if (!name || (email && !validEmail(email))) return fail("Client name and valid email required");
-  const clientId=id(), at=iso();
+  const name=clean(data.name,150),email=clean(data.email,200),category=clean(data.category||"Business",50);
+  const pan=normalizeIdentifier(clean(data.pan,20)),gstin=normalizeIdentifier(clean(data.gstin,20));
+  const phone=clean(data.phone,30),code=clean(data.code,40).toUpperCase(),group=clean(data.client_group,120);
+  const manager=clean(data.manager_id,100);
+  if(!name||(email&&!validEmail(email))||(pan&&!validPan(pan))||(gstin&&!validGstin(gstin))||
+     !validClientPhone(phone)||(code&&!/^[-A-Z0-9_]+$/.test(code)))
+    return fail("Check client name, email, PAN, GSTIN, phone and code");
+  if(manager&&!(await validateFirmUser(env.DB,user.firm_id,manager)))return fail("Manager not found in firm");
+  const duplicate=await env.DB.prepare("SELECT id FROM clients WHERE firm_id=? AND archived_at IS NULL AND ( (pan=? AND ?!='') OR (gstin=? AND ?!='') OR (code=? AND ?!='')) LIMIT 1")
+    .bind(user.firm_id,pan,pan,gstin,gstin,code,code).first();
+  if(duplicate)return fail("Duplicate client PAN, GSTIN or code",409);
+  const clientId=id(),at=iso(),clientCode=code||"CL-"+clientId.slice(0,8).toUpperCase();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO clients(id,firm_id,name,category,pan,gstin,email,phone,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(clientId,user.firm_id,name,category,clean(data.pan,20),clean(data.gstin,20),email,clean(data.phone,30),clean(data.notes,1000),at,at),
+    env.DB.prepare("INSERT INTO clients(id,firm_id,name,category,pan,gstin,email,phone,notes,code,client_group,manager_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(clientId,user.firm_id,name,category,pan||null,gstin||null,email||null,phone||null,clean(data.notes,1000)||null,clientCode,group||null,manager||null,at,at),
     await audit(env.DB,user,"created","client",clientId)
   ]);
   return output({ id:clientId },201);
@@ -375,6 +386,8 @@ async function api(request,env) {
     }
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
     if(path==="/api/clients"&&method==="POST") return handleCreateClient(await bodyJSON(request),env,user);
+    if(/^\/api\/clients\/[a-f0-9-]+(?:\/(?:profile|contacts|gstins|archive))?$/.test(path))
+      return handleClientMaster(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
     if(path==="/api/tasks"&&method==="POST") return handleCreateTask(await bodyJSON(request),env,user);
     if(path==="/api/documents"&&method==="POST") return handleCreateDocument(await bodyJSON(request),env,user);
     if(path==="/api/staff"&&method==="POST") return handleCreateStaff(await bodyJSON(request),env,user);

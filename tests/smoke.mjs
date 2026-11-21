@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { gstinCheckCharacter } from "../src/client-validation.js";
 
 const base = "http://127.0.0.1:8787";
 let principalCookie = "";
@@ -101,6 +102,32 @@ assert.equal(snap.tasks.find(t=>t.period==="2026-11")?.ask_by_date,"2026-12-09")
 const taskHistory=ok(await call("/api/tasks/"+task.id+"/history"));
 assert.ok(taskHistory.events.length>=2);
 
+const pan="ABCDE1234F";
+const gstinBase="24ABCDE1234F1Z",gstin=gstinBase+gstinCheckCharacter(gstinBase);
+ok(await call("/api/clients/"+clientA.id,"PATCH",{code:"CL-TEST",pan,client_group:"Shah Group"}));
+const profile=ok(await call("/api/clients/"+clientA.id+"/profile"));
+assert.equal(profile.client.pan,pan);
+assert.equal(profile.client.code,"CL-TEST");
+const addedContact=ok(await call("/api/clients/"+clientA.id+"/contacts","POST",{
+  name:"Accounts Team",email:"accounts2@example.test",phone:"+919876543210",
+  preferred_channel:"whatsapp",whatsapp_opt_in:true,whatsapp_opt_in_source:"Direct written authorization"
+}));
+assert.ok(addedContact.id);
+const registration=ok(await call("/api/clients/"+clientA.id+"/gstins","POST",{gstin}));
+assert.ok(registration.id);
+const full=ok(await call("/api/clients/"+clientA.id+"/profile"));
+assert.equal(full.contacts.length,1);
+assert.equal(full.gstins.length,1);
+const visibleToStaff=ok(await call("/api/clients/"+clientA.id+"/profile","GET",undefined,staffCookie));
+assert.equal(visibleToStaff.client.pan,undefined);
+assert.equal(visibleToStaff.gstins.length,0);
+const deniedEdit=await call("/api/clients/"+clientA.id,"PATCH",{name:"Not permitted"},staffCookie);
+assert.equal(deniedEdit.res.status,403);
+const duplicateClient=await call("/api/clients","POST",{name:"Duplicate PAN",pan});
+assert.equal(duplicateClient.res.status,409);
+ok(await call("/api/clients/"+clientB.id+"/archive","POST",{}));
+snap=ok(await call("/api/bootstrap"));
+assert.equal(snap.clients.some(c=>c.id===clientB.id),false);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");

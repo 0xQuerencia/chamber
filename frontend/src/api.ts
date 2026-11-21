@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -22,3 +22,9 @@ export const exportUrl=(kind:"clients"|"tasks"|"documents")=>"/api/export?kind="
 export const getTracker=(from:string,service="",page=0)=>api<TrackerSummary>("/api/tracker?from="+encodeURIComponent(from)+"&page="+page+"&size=100"+(service?"&service="+encodeURIComponent(service):""));
 export const getTrackerDetail=(clientId:string,period:string)=>api<TrackerDetail>("/api/tracker/detail?client_id="+encodeURIComponent(clientId)+"&period="+encodeURIComponent(period));
 export const saveInwardReceipt=(clientId:string,period:string,documentIds:string[],receivedVia:string,note:string)=>api<{received:number;already_received:number}>("/api/inward","POST",{client_id:clientId,period,document_ids:documentIds,received_via:receivedVia,note});
+
+export const getClientProfile=(id:string)=>api<ClientProfileData>("/api/clients/"+encodeURIComponent(id)+"/profile");
+export const updateClient=(id:string,values:Payload)=>api<{ok:boolean}>("/api/clients/"+encodeURIComponent(id),"PATCH",values);
+export const archiveClient=(id:string)=>api<{ok:boolean}>("/api/clients/"+encodeURIComponent(id)+"/archive","POST",{});
+export const addClientContact=(id:string,values:Payload)=>api<{id:string}>("/api/clients/"+encodeURIComponent(id)+"/contacts","POST",values);
+export const addClientGstin=(id:string,gstin:string)=>api<{id:string}>("/api/clients/"+encodeURIComponent(id)+"/gstins","POST",{gstin});
