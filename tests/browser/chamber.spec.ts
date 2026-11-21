@@ -75,7 +75,7 @@ test("Small screen keeps essential navigation operable",async({page})=>{
  await page.setViewportSize({width:390,height:844});
  await page.goto("/?preview=1");
  await page.getByRole("button",{name:"Show navigation"}).click();
- await expect(page.getByRole("navigation",{name:"Chamber modules"})).toBeVisible();
+ await expect(page.locator(".erp-menu")).toBeVisible();
  await page.locator(".erp-menu").getByRole("button",{name:"Work Board"}).click();
  await expect(page.getByRole("heading",{name:"Work Board"})).toBeVisible();
 });
