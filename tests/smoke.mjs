@@ -308,6 +308,23 @@ const managerPreview=ok(await call("/api/messages/preview","POST",{
   channel:"email",period:"2026-11",client_ids:[managedClient.id,privateClient.id]
 },managerCookie));
 assert.equal(managerPreview.previews.find(p=>p.client_id===privateClient.id).eligible,false);
+const deniedSecurity=await call("/api/security/events","GET",undefined,staffCookie);
+assert.equal(deniedSecurity.res.status,403);
+const failedKnownLogin=await call("/api/login","POST",{
+ email:"aarav@example.test",password:"incorrect-password"
+},"");
+assert.equal(failedKnownLogin.res.status,401);
+const securityFeed=ok(await call("/api/security/events"));
+assert.ok(securityFeed.total>=4);
+assert.ok(securityFeed.events.some(e=>e.event==="signed_in"));
+assert.ok(securityFeed.events.some(e=>e.event==="exported"));
+assert.ok(securityFeed.events.some(e=>e.event==="access_denied"));
+assert.ok(securityFeed.events.some(e=>e.event==="sign_in_failed"));
+assert.ok(securityFeed.events.some(e=>e.event==="mfa_verified"));
+assert.ok(securityFeed.events.every(e=>!JSON.stringify(e).includes("strong-password-123")));
+assert.ok(securityFeed.events.every(e=>!JSON.stringify(e).includes("otpauth://")));
+const filteredSecurity=ok(await call("/api/security/events?event=access_denied"));
+assert.equal(filteredSecurity.events.every(e=>e.event==="access_denied"),true);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");

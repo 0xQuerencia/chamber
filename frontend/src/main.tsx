@@ -15,6 +15,7 @@ import "./evidence.css";
 import "./reminders.css";
 import "./keyboard.css";
 import "./mfa.css";
+import "./security.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
