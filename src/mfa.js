@@ -97,7 +97,10 @@ export async function handleMfa(request,env,deps){
   else{
    secret=base32(crypto.getRandomValues(new Uint8Array(20)));
    encrypted=await seal(env,secret);
-   await env.DB.prepare("UPDATE mfa_pending SET secret_enc=? WHERE token_hash=?").bind(encrypted,hash).run();
+   await env.DB.prepare("UPDATE mfa_pending SET secret_enc=? WHERE token_hash=? AND secret_enc IS NULL").bind(encrypted,hash).run();
+   const latest=await env.DB.prepare("SELECT secret_enc FROM mfa_pending WHERE token_hash=?").bind(hash).first();
+   if(!latest?.secret_enc)return fail("Enrollment challenge expired",401);
+   secret=await unseal(env,latest.secret_enc);
   }
   const label=encodeURIComponent("Chamber:"+p.email);
   const uri="otpauth://totp/"+label+"?secret="+secret+"&issuer=Chamber&algorithm=SHA1&digits=6&period=30";
@@ -110,6 +113,9 @@ export async function handleMfa(request,env,deps){
   await env.DB.prepare("UPDATE mfa_pending SET attempts=attempts+1 WHERE token_hash=?").bind(hash).run();
   return fail("Invalid authenticator code",401);
  }
+ const reserved=await env.DB.prepare("UPDATE mfa_pending SET attempts=5 WHERE token_hash=? AND attempts<5 AND expires_at>?")
+  .bind(hash,iso()).run();
+ if(Number(reserved.meta?.changes||0)!==1)return fail("Invalid or used sign-in challenge",401);
  const user={id:p.user_id,firm_id:p.firm_id,email:p.email,name:p.name,role:p.role};
  const at=iso();
  const updates=[
