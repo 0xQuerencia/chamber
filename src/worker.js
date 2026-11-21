@@ -94,8 +94,11 @@ async function handleLogin(request, env) {
   }
   await env.DB.prepare("DELETE FROM login_attempts WHERE email=?").bind(email).run();
   const token = [...crypto.getRandomValues(new Uint8Array(32))].map(v => v.toString(16).padStart(2, "0")).join("");
-  await env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)")
-    .bind(await hashToken(token), user.id, new Date(Date.now() + SESSION_DAYS * 86400000).toISOString(), iso()).run();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)")
+      .bind(await hashToken(token), user.id, new Date(Date.now() + SESSION_DAYS * 86400000).toISOString(), iso()),
+    await audit(env.DB,user,"signed_in","session",user.id)
+  ]);
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return output({ ok: true }, 200, { "Set-Cookie": "chamber_session=" + token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800" + secure });
 }
@@ -106,7 +109,7 @@ async function bootstrap(db, user) {
     db.prepare("SELECT id,name,email,role,active FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
     (privileged
       ? db.prepare("SELECT * FROM clients WHERE firm_id=? ORDER BY name").bind(user.firm_id)
-      : db.prepare("SELECT DISTINCT c.* FROM clients c JOIN tasks t ON c.id=t.client_id WHERE c.firm_id=? AND t.firm_id=? AND t.assignee_id=? ORDER BY c.name").bind(user.firm_id,user.firm_id,user.id)).all(),
+      : db.prepare("SELECT DISTINCT c.id,c.name,c.category,c.email,c.phone,c.created_at,c.updated_at, NULL AS pan,NULL AS gstin,NULL AS notes FROM clients c JOIN tasks t ON c.id=t.client_id WHERE c.firm_id=? AND t.firm_id=? AND t.assignee_id=? ORDER BY c.name").bind(user.firm_id,user.firm_id,user.id)).all(),
     (privileged
       ? db.prepare("SELECT * FROM tasks WHERE firm_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id)
       : db.prepare("SELECT * FROM tasks WHERE firm_id=? AND assignee_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id,user.id)).all(),
@@ -318,6 +321,7 @@ async function handleExport(request,env,user) {
   };
   if(!columns[kind])return fail("Unknown export type");
   const rows=await env.DB.prepare("SELECT "+columns[kind].join(",")+" FROM "+kind+" WHERE firm_id=? ORDER BY created_at DESC LIMIT 10000".replace(kind==="documents"?"created_at DESC":"no-sentinel",kind==="documents"?"updated_at DESC":"no-sentinel")).bind(user.firm_id).all();
+  await (await audit(env.DB,user,"exported","data",kind,{rows:rows.results.length})).run();
   const csv=[columns[kind].join(","),...rows.results.map(row=>columns[kind].map(key=>csvCell(row[key])).join(","))].join("\r\n");
   return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":"attachment; filename=chamber-"+kind+".csv","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
 }
@@ -338,7 +342,10 @@ async function api(request,env) {
     if(!user) return fail("Sign in required",401);
     if(path==="/api/logout"&&method==="POST"){
       const token=(request.headers.get("Cookie")||"").split(";").map(s=>s.trim()).find(s=>s.startsWith("chamber_session="));
-      if(token) await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await hashToken(token.split("=")[1])).run();
+      if(token) await env.DB.batch([
+        env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await hashToken(token.split("=")[1])),
+        await audit(env.DB,user,"signed_out","session",user.id)
+      ]);
       return output({ok:true},200,{"Set-Cookie":"chamber_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"});
     }
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
