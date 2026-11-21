@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import DeliveryPanel from "./DeliveryPanel";
 import { ClipboardList, Copy, Mail, MessageCircle, RefreshCw, Send, X } from "lucide-react";
 import { cancelMessageBatch, createMessageTemplate, draftBulkMessages, getMessageBatch, getMessageBatches, getMessageTemplates, previewBulkMessages } from "./api";
 import type { MessageBatch, MessageBatchDetail, MessageChannel, MessagePreview, MessageTemplate, Workspace } from "./types";
@@ -105,7 +106,7 @@ export default function Composer({workspace,preview:demo,onRefresh}:{workspace:W
    <div className="composer-heading-count"><strong>{selected.length}</strong> clients selected</div></header>
   {demo&&<p className="tracker-notice">This is a read-only sample. Message delivery and draft creation are disabled.</p>}
   {!privileged&&<p className="tracker-notice">Only principals and managers may prepare communication batches.</p>}
-  <div className="composer-disclaimer"><MessageCircle size={16}/><p><strong>Draft mode.</strong> The firm's Gmail/Microsoft 365 and approved WhatsApp Business provider are not connected. Opening a mail or WhatsApp draft does not prove it was sent, delivered, or read.</p></div>
+  <div className="composer-disclaimer"><MessageCircle size={16}/><p><strong>Controlled communications.</strong> Manual drafts are available; provider delivery is only enabled when the firm connects Gmail or the official WhatsApp Cloud API and confirms a queue. See the delivery panel for live configuration and per-recipient status.</p></div>
   {error&&<div className="alert" role="alert">{error}</div>}
   {message&&<div className="tracker-notice" role="status">{message}</div>}
 
@@ -165,6 +166,7 @@ export default function Composer({workspace,preview:demo,onRefresh}:{workspace:W
     {batch&&<section className="composer-panel" aria-label="Prepared messages">
      <header className="composer-review-head"><h2>Prepared request batch</h2><span>{statusText(batch.batch.status)} · {batch.batch.recipient_count} clients</span></header>
      <p className="composer-muted">No delivery service is connected. Opening these links uses the user's own email or WhatsApp interface, and sending remains a separate manual action.</p>
+     <DeliveryPanel key={batch.batch.id} batch={batch} onUpdate={setBatch} principal={workspace.user.role==="principal"} disabled={!canEdit||busy}/>
      {batch.messages.map(m=><div className="composer-draft" key={m.id}>
       <div><strong>{m.client_name}</strong><small>{m.recipient} · {statusText(m.status)}</small></div>
       <pre>{m.body}</pre>
