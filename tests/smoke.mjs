@@ -182,6 +182,40 @@ for(const kind of ["due_soon","overdue","missing","unassigned","review","waiting
 }
 const deniedDashboard=await call("/api/reports/dashboard","GET",undefined,staffCookie);
 assert.equal(deniedDashboard.res.status,403);
+// Reminder engine produces staff-reviewed suggestions, never outbound messages.
+const reminderDue=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
+const reminderTask=ok(await call("/api/tasks","POST",{
+ client_id:clientA.id,title:"Reminder workflow test",service:"GST",period:"2026-10",due_date:reminderDue,assignee_id:staff.id
+}));
+const reminderDocument=ok(await call("/api/documents","POST",{task_id:reminderTask.id,name:"Purchase register"}));
+const disabledReminder=ok(await call("/api/reminders/config"));
+assert.equal(disabledReminder.config.enabled,0);
+const deniedPolicy=await call("/api/reminders/config","GET",undefined,staffCookie);
+assert.equal(deniedPolicy.res.status,403);
+ok(await call("/api/reminders/config","PUT",{
+ enabled:true,ask_days:10,remind_days:6,escalate_days:3,max_reminders:4,quiet_start:"21:00",quiet_end:"08:00"
+}));
+const reminderFirst=ok(await call("/api/reminders/refresh","POST",{}));
+assert.equal(reminderFirst.delivery_enabled,false);
+assert.ok(reminderFirst.result.created>=1);
+const pendingReminders=ok(await call("/api/reminders?status=pending"));
+const pending=pendingReminders.items.find(x=>x.client_id===clientA.id&&x.period==="2026-10");
+assert.ok(pending,"A client with outstanding information should have a reminder");
+assert.equal(pending.stage,"remind");
+const reminderAgain=ok(await call("/api/reminders/refresh","POST",{}));
+assert.equal(reminderAgain.result.created,0,"The scheduler must be idempotent");
+const fakeBatch=await call("/api/reminders/"+pending.id+"/prepared","POST",{batch_id:"00000000-0000-0000-0000-000000000001"});
+assert.equal(fakeBatch.res.status,400,"A prepared reminder must match a saved request draft");
+const pauseDate=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+ok(await call("/api/reminders/clients/"+clientA.id+"/pause","POST",{paused_until:pauseDate,reason:"Client requested a pause"}));
+const paused=ok(await call("/api/reminders?status=pending"));
+assert.equal(paused.items.find(x=>x.id===pending.id).paused_until,pauseDate);
+ok(await call("/api/reminders/clients/"+clientA.id+"/resume","POST",{}));
+ok(await call("/api/documents/"+reminderDocument.id,"PATCH",{status:"received"}));
+const resolvedReminder=ok(await call("/api/reminders/refresh","POST",{}));
+assert.ok(resolvedReminder.result.resolved>=1);
+const resolvedFeed=ok(await call("/api/reminders?status=resolved"));
+assert.ok(resolvedFeed.items.some(x=>x.id===pending.id));
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");
