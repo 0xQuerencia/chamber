@@ -1,0 +1,32 @@
+/* Client spreadsheet import, matching the compact ERP register language. */
+.import-screen{color:#192e43;min-width:0}
+.import-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px;flex-wrap:wrap}
+.import-heading h1{font-size:23px;margin:0}.import-heading p{font-size:12px;color:#60778b;margin:5px 0 0}
+.import-steps{display:flex;gap:0;border:1px solid #d5e0e9;background:#f1f4f8;margin-bottom:12px;flex-wrap:wrap}
+.import-steps span{flex:1;min-width:115px;text-align:center;padding:10px 8px;font-size:12px;color:#687f91;border-right:1px solid #d8e3eb}
+.import-steps span:last-child{border-right:0}.import-steps span.done{color:#1e6a53;font-weight:700;background:#edf7f1}
+.import-panel{border:1px solid #dce5ec;background:#fff;padding:16px;margin:10px 0}
+.import-panel h2{display:flex;align-items:center;gap:7px;font-size:14px;margin:0 0 11px}
+.import-file{border:1px dashed #94aec5;background:#f7fafc;padding:22px;display:flex;align-items:center;gap:13px;cursor:pointer;flex-wrap:wrap}
+.import-file input{max-width:100%;font-size:12px;color:#354f67}.import-file>span{font-size:12px;font-weight:600}
+.import-hint{font-size:11px;color:#697e90;line-height:1.5;margin:9px 0 0}
+.import-mapping{display:grid;grid-template-columns:repeat(3,minmax(160px,1fr));gap:12px}
+.import-mapping label{display:grid;gap:4px;font-size:12px;color:#4d6478;font-weight:600}
+.import-mapping select{min-height:34px;border:1px solid #c8d4df;background:#fff;border-radius:3px;padding:5px 7px;color:#1d3b53;min-width:0}
+.import-mapping select:focus-visible{outline:2px solid #2a70a3}
+.import-preview-scroll{max-width:100%;overflow:auto;border:1px solid #e0e8ef}
+.import-preview-scroll table{border-collapse:collapse;width:100%;min-width:780px;font-size:12px}
+.import-preview-scroll th,.import-preview-scroll td{padding:8px 10px;border-bottom:1px solid #e7ecf2;text-align:left}
+.import-preview-scroll th{background:#edf3f8;color:#3b566d}
+.import-preview-scroll tbody tr:nth-child(even){background:#f9fbfd}
+.import-actions{display:flex;align-items:center;gap:10px;margin:12px 0;flex-wrap:wrap}.import-actions .tracker-btn.primary{width:auto;margin:0}
+.import-progress{height:8px;border-radius:4px;background:#e4eaf0;overflow:hidden;margin:10px 0}
+.import-progress span{height:100%;display:block;background:#24725e}
+.import-issues{border:1px solid #f1cac4;background:#fdf5f3;padding:10px 12px;margin:12px 0}
+.import-issues h3{font-size:12px;color:#8b3328;margin:0 0 6px}
+.import-issues p{font-size:11px;color:#8b3328;margin:5px 0}
+.import-complete{border-top:1px solid #dbe4e9;margin-top:14px;padding-top:12px}
+.import-complete p{display:flex;align-items:center;gap:6px;color:#246c56;font-weight:700;font-size:12px}
+.import-complete div{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:1000px){.import-mapping{grid-template-columns:repeat(2,minmax(150px,1fr))}}
+@media(max-width:680px){.import-mapping{grid-template-columns:minmax(0,1fr)}}

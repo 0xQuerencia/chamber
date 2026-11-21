@@ -6,6 +6,7 @@ import "./classic-erp.css";
 import "./tracker.css";
 import "./client-master.css";
 import "./work-board.css";
+import "./import-wizard.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
