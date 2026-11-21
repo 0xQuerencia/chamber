@@ -68,6 +68,8 @@ assert.ok(snap.activity.some(e => e.event === "signed_in"), "Sign-in must be log
 assert.ok(snap.activity.some(e => e.event === "exported"), "Export must be logged");
 
 const template = ok(await call("/api/templates","POST",{name:"Monthly GST return",service:"GST",frequency:"monthly",due_day:15}));
+const requirement=ok(await call("/api/requirements","POST",{template_id:template.id,name:"Sales register",sort_order:1}));
+assert.ok(requirement.id);
 ok(await call("/api/enrollments","POST",{client_id:clientA.id,template_id:template.id,assignee_id:staff.id}));
 const generated = ok(await call("/api/recurrence","POST",{period:"2026-11"}));
 assert.equal(generated.created,1);
@@ -81,6 +83,23 @@ assert.equal(snap.templates.length,1);
 assert.equal(snap.enrollments.length,1);
 assert.equal(snap.tasks.filter(t=>t.title==="Monthly GST return").length,2);
 assert.equal(snap.tasks.find(t=>t.period==="2026-11")?.due_date,"2026-12-15");
+assert.equal(snap.tasks.find(t=>t.period==="2026-11")?.ask_by_date,"2026-12-05");
+const tracker=ok(await call("/api/tracker?from=2026-04"));
+assert.equal(tracker.periods.length,12);
+assert.equal(tracker.clients.find(c=>c.id===clientA.id).cells.find(c=>c.period==="2026-11").state,"missing");
+const detail=ok(await call("/api/tracker/detail?client_id="+clientA.id+"&period=2026-11"));
+assert.equal(detail.documents.length,1);
+const receipt=ok(await call("/api/inward","POST",{client_id:clientA.id,period:"2026-11",document_ids:[detail.documents[0].id],received_via:"email"}));
+assert.equal(receipt.received,1);
+const afterReceipt=ok(await call("/api/tracker?from=2026-04"));
+assert.equal(afterReceipt.clients.find(c=>c.id===clientA.id).cells.find(c=>c.period==="2026-11").state,"complete");
+const override=ok(await call("/api/overrides","POST",{template_id:template.id,period:"2026-11",new_due_date:"2026-12-19",source_reference:"Test extension"}));
+assert.equal(override.updated_tasks,1);
+snap=ok(await call("/api/bootstrap"));
+assert.equal(snap.tasks.find(t=>t.period==="2026-11")?.due_date,"2026-12-19");
+assert.equal(snap.tasks.find(t=>t.period==="2026-11")?.ask_by_date,"2026-12-09");
+const taskHistory=ok(await call("/api/tasks/"+task.id+"/history"));
+assert.ok(taskHistory.events.length>=2);
 
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
