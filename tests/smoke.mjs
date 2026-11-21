@@ -1,4 +1,14 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
+function otpCode(secret){
+ const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+ let bits=0,buffer=0,bytes=[];
+ for(const char of secret){buffer=(buffer<<5)|alphabet.indexOf(char);bits+=5;if(bits>=8){bytes.push((buffer>>(bits-8))&255);bits-=8}}
+ const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));
+ const hmac=createHmac("sha1",Buffer.from(bytes)).update(counter).digest(),offset=hmac[19]&15;
+ const code=(hmac.readUInt32BE(offset)&0x7fffffff)%1000000;
+ return String(code).padStart(6,"0");
+}
 import { gstinCheckCharacter } from "../src/client-validation.js";
 
 const base = "http://127.0.0.1:8787";
@@ -20,9 +30,23 @@ const setup = await call("/api/setup", "POST", { firm:"Test CA & Co.", name:"Tes
 assert.equal(setup.res.status, 201);
 const retry = await call("/api/setup", "POST", { firm:"Second Firm", name:"Fake", email:"other@example.test", password:"strong-password-123" }, "", { "X-Setup-Token":"test-setup-token-123456789" });
 assert.equal(retry.res.status, 409);
-const login = await call("/api/login", "POST", { email:"principal@example.test", password:"strong-password-123" }, "");
-ok(login);
-principalCookie = login.res.headers.get("set-cookie").split(";")[0];
+const login=await call("/api/login","POST",{email:"principal@example.test",password:"strong-password-123",device_label:"Test office PC"},"");
+assert.equal(login.body.requires_mfa,true);
+assert.equal(login.body.enrollment_required,true);
+assert.equal(login.res.headers.get("set-cookie"),null,"Password alone must never issue a privileged session");
+const mfaSecret=ok(await call("/api/mfa/setup","POST",{challenge:login.body.challenge},""));
+assert.ok(mfaSecret.secret);
+assert.ok(mfaSecret.otpauth_uri.startsWith("otpauth://"));
+const actualOtp=otpCode(mfaSecret.secret);
+const badOtp=actualOtp.slice(0,5)+(actualOtp.at(-1)==="9"?"0":String(Number(actualOtp.at(-1))+1));
+const invalidMfa=await call("/api/mfa/verify","POST",{challenge:login.body.challenge,code:badOtp,device_label:"Test office PC"},"");
+assert.equal(invalidMfa.res.status,401);
+const mfaVerify=await call("/api/mfa/verify","POST",{challenge:login.body.challenge,code:actualOtp,device_label:"Test office PC"},"");
+ok(mfaVerify);
+principalCookie=mfaVerify.res.headers.get("set-cookie").split(";")[0];
+assert.ok(principalCookie.startsWith("chamber_session="));
+const replay=await call("/api/mfa/verify","POST",{challenge:login.body.challenge,code:actualOtp},"");
+assert.equal(replay.res.status,401,"MFA challenge must be one-time");
 assert.ok(principalCookie.startsWith("chamber_session="));
 assert.equal(ok(await call("/api/bootstrap")).clients.length, 0);
 
