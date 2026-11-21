@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -10,7 +10,7 @@ export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?
 }
 export const getSession=()=>api<Session>("/api/session");
 export const getWorkspace=()=>api<Workspace>("/api/bootstrap");
-export const login=(email:string,password:string)=>api<{ok:boolean}>("/api/login","POST",{email,password});
+export const login=(email:string,password:string,deviceLabel="")=>api<{ok:boolean}>("/api/login","POST",{email,password,device_label:deviceLabel});
 export const logout=()=>api<{ok:boolean}>("/api/logout","POST",{});
 export const setup=(values:Payload,token:string)=>api<{ok:boolean}>("/api/setup","POST",values,{"X-Setup-Token":token});
 export const createRecord=(kind:"clients"|"tasks"|"documents"|"staff"|"templates"|"enrollments"|"requirements"|"overrides",values:Payload)=>api<{id?:string;ok?:boolean}>("/api/"+kind,"POST",values);
@@ -58,3 +58,6 @@ export const createMessageTemplate=(name:string,channel:MessageChannel,body:stri
 
 export const getInsights=()=>api<DashboardReport>("/api/reports/dashboard");
 export const getInsightDrill=(kind:ReportKind,page=0)=>api<DrillReport>("/api/reports/drilldown?kind="+encodeURIComponent(kind)+"&page="+page);
+
+export const getDevices=()=>api<DeviceList>("/api/devices");
+export const revokeDevice=(id:string)=>api<{ok:boolean}>("/api/devices/"+encodeURIComponent(id)+"/revoke","POST",{});
