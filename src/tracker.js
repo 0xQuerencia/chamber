@@ -1,4 +1,5 @@
 import { validCalendarDate, validMonth, sequenceMonths, shiftCalendarDays, trackerCellState } from "./domain.js";
+import {clientScope,canReadClient} from "./permissions.js";
 
 // Permission and audit primitives are passed from the authenticated Worker entrypoint.
 export async function handleWorkflow(request, env, user, deps) {
@@ -7,7 +8,7 @@ export async function handleWorkflow(request, env, user, deps) {
  const elevated=isPrivileged(user);
 
  if(path==="/api/requirements"&&method==="POST") {
-  if(!elevated)return fail("Insufficient permission",403);
+  if(user.role!=="principal")return fail("Only principal can change firm-wide requirements",403);
   const data=await deps.bodyJSON(request);
   const templateId=clean(data.template_id,100),name=clean(data.name,180);
   const required=data.required===false?0:1,sort=data.sort_order===undefined?0:Number(data.sort_order);
@@ -33,7 +34,7 @@ export async function handleWorkflow(request, env, user, deps) {
  }
 
  if(path==="/api/overrides"&&method==="POST") {
-  if(!elevated)return fail("Insufficient permission",403);
+  if(user.role!=="principal")return fail("Only principal can change firm-wide deadline overrides",403);
   const data=await deps.bodyJSON(request);
   const templateId=clean(data.template_id,100),period=clean(data.period,10);
   const due=clean(data.new_due_date,10),reference=clean(data.source_reference,300);
@@ -64,11 +65,10 @@ export async function handleWorkflow(request, env, user, deps) {
   if(!validMonth(from))return fail("from must be a YYYY-MM month",400);
   const periods=sequenceMonths(from),size=Math.min(200,Math.max(1,Math.floor(Number(url.searchParams.get("size"))||100)));
   const page=Math.max(0,Math.floor(Number(url.searchParams.get("page"))||0));
-  const service=clean(url.searchParams.get("service"),80),staffOnly=!elevated;
-  const clients=(await db.prepare("SELECT c.id,c.name,c.category FROM clients c WHERE c.firm_id=? "+
-     (staffOnly?"AND EXISTS(SELECT 1 FROM tasks a WHERE a.firm_id=c.firm_id AND a.client_id=c.id AND a.assignee_id=?) ":"")+
-     "ORDER BY c.name LIMIT ? OFFSET ?")
-    .bind(...(staffOnly?[user.firm_id,user.id,size+1,page*size]:[user.firm_id,size+1,page*size])).all()).results;
+  const service=clean(url.searchParams.get("service"),80),staffOnly=user.role==="staff",scope=clientScope(user,"c");
+  const clients=(await db.prepare("SELECT c.id,c.name,c.category FROM clients c WHERE c.firm_id=? AND c.archived_at IS NULL AND "+
+     scope.sql+" ORDER BY c.name LIMIT ? OFFSET ?")
+    .bind(user.firm_id,...scope.args,size+1,page*size).all()).results;
   const visible=clients.slice(0,size);
   const rows=visible.map(c=>({id:c.id,name:c.name,category:c.category,cells:periods.map(period=>({period,state:"not_due",tasks:0,total:0,received:0,waived:0}))}));
   if(visible.length) {
@@ -98,8 +98,8 @@ export async function handleWorkflow(request, env, user, deps) {
   const cid=clean(url.searchParams.get("client_id"),100),period=clean(url.searchParams.get("period"),7);
   if(!cid||!validMonth(period))return fail("Client and YYYY-MM period required");
   const client=await db.prepare("SELECT id,name FROM clients WHERE firm_id=? AND id=?").bind(user.firm_id,cid).first();
-  if(!client)return fail("Client not found",404);
-  const staffOnly=!elevated;
+  if(!client||!(await canReadClient(db,user,cid)))return fail("Client not found or access denied",404);
+  const staffOnly=user.role==="staff";
   const tasks=(await db.prepare("SELECT id,title,service,status,due_date,ask_by_date FROM tasks WHERE firm_id=? AND client_id=? AND period=? "+
     (staffOnly?"AND assignee_id=? ":"")+"ORDER BY due_date,id")
    .bind(...(staffOnly?[user.firm_id,cid,period,user.id]:[user.firm_id,cid,period])).all()).results;
@@ -118,6 +118,7 @@ export async function handleWorkflow(request, env, user, deps) {
   if(!cid||!validMonth(period)||!ids.length||ids.length>50||ids.some(x=>typeof x!=="string"||!/^[a-f0-9-]{36}$/.test(x))||
     new Set(ids).size!==ids.length||!["courier","email","whatsapp","portal","in_person","other"].includes(via))
     return fail("Valid client, period, receipt source and 1–50 document IDs required");
+  if(!(await canReadClient(db,user,cid)))return fail("Client not found or access denied",404);
   const docs=(await db.prepare("SELECT d.id,d.status,d.task_id,t.assignee_id FROM documents d JOIN tasks t ON d.task_id=t.id AND d.firm_id=t.firm_id WHERE d.firm_id=? AND t.client_id=? AND t.period=? AND d.id IN ("+ids.map(()=>"?").join(",")+")")
    .bind(user.firm_id,cid,period,...ids).all()).results;
   if(docs.length!==ids.length)return fail("Requirement not found",404);
@@ -135,9 +136,9 @@ export async function handleWorkflow(request, env, user, deps) {
 
  const history=path.match(/^\/api\/tasks\/([a-f0-9-]+)\/history$/);
  if(history&&method==="GET") {
-  const task=await db.prepare("SELECT id,assignee_id FROM tasks WHERE firm_id=? AND id=?").bind(user.firm_id,history[1]).first();
-  if(!task)return fail("Task not found",404);
-  if(!elevated&&task.assignee_id!==user.id)return fail("Insufficient permission",403);
+  const task=await db.prepare("SELECT id,client_id,assignee_id FROM tasks WHERE firm_id=? AND id=?").bind(user.firm_id,history[1]).first();
+  if(!task||!(await canReadClient(db,user,task.client_id)))return fail("Task not found",404);
+  if(user.role==="staff"&&task.assignee_id!==user.id)return fail("Insufficient permission",403);
   const events=(await db.prepare("SELECT e.id,e.from_status,e.to_status,e.note,e.at,u.name AS actor_name FROM task_events e LEFT JOIN users u ON u.id=e.actor_id WHERE e.firm_id=? AND e.task_id=? ORDER BY e.at DESC")
    .bind(user.firm_id,task.id).all()).results;
   return output({events});
