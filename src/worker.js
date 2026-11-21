@@ -7,6 +7,7 @@ import { handleImports } from "./imports.js";
 import { handleMessages } from "./messages.js";
 import { handleReports } from "./reports.js";
 import { handleSheetSettings, scheduledSheetSync } from "./sheets.js";
+import { handleFiles, scanCallback } from "./files.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 
 const enc = new TextEncoder();
@@ -433,6 +434,7 @@ async function api(request,env) {
     if(path==="/api/enrollments"&&method==="POST") return handleEnroll(await bodyJSON(request),env,user);
     if(path==="/api/recurrence"&&method==="POST") return handleGenerate(await bodyJSON(request),env,user);
     if(path==="/api/export"&&method==="GET") return handleExport(request,env,user);
+    if(path==="/api/files"||path.startsWith("/api/files/"))return handleFiles(request,env,user,{output,fail,clean,audit,id,iso});
     if(path.startsWith("/api/sheets/"))return handleSheetSettings(request,env,user,{output,fail,clean,audit,id,iso,bodyJSON});
     if(path.startsWith("/api/reports/"))return handleReports(request,env,user,{output,fail,isPrivileged});
     if(path.startsWith("/api/messages/"))
@@ -469,6 +471,7 @@ export default {
   },
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
+    if(path==="/api/file-scan/callback")return scanCallback(request,env);
     if(path.startsWith("/api/")) return api(request,env);
     if(!env.ASSETS) return fail("Static assets missing",503);
     const response=await env.ASSETS.fetch(request);

@@ -59,3 +59,6 @@ export interface NamedDevice {id:string;label:string;user_agent:string;first_see
 export interface DeviceList {devices:NamedDevice[];current_device_id:string|null}
 
 export interface SheetsStatus {connected:boolean;spreadsheet_id:string|null;last_synced_at:string|null;last_error:string|null;credentials_configured:boolean}
+
+export type ScanStatus="pending"|"clean"|"infected"|"failed";
+export interface StoredDocument {id:string;filename:string;mime_type:string;size_bytes:number;sha256:string;scan_status:ScanStatus;created_at:string;scanned_at:string|null}

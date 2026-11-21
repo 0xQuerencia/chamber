@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -65,3 +65,14 @@ export const revokeDevice=(id:string)=>api<{ok:boolean}>("/api/devices/"+encodeU
 export const getSheetsStatus=()=>api<SheetsStatus>("/api/sheets/status");
 export const connectSheets=(spreadsheetId:string)=>api<{ok:boolean}>("/api/sheets/connect","POST",{spreadsheet_id:spreadsheetId});
 export const disconnectSheets=()=>api<{ok:boolean}>("/api/sheets/disconnect","POST",{});
+
+export const getEvidenceFiles=(requirementId:string)=>api<{files:StoredDocument[];download_policy:string}>("/api/files?requirement_id="+encodeURIComponent(requirementId));
+export const evidenceDownloadUrl=(id:string)=>"/api/files/"+encodeURIComponent(id)+"/download";
+export async function uploadEvidence(requirementId:string,file:File):Promise<{id:string;status:"pending";filename:string;size_bytes:number;message:string}>{
+ const response=await fetch("/api/files/upload?requirement_id="+encodeURIComponent(requirementId),{
+  method:"POST",credentials:"same-origin",headers:{"Content-Type":file.type,"X-File-Name":encodeURIComponent(file.name)},body:file
+ });
+ const result=await response.json().catch(()=>({}));
+ if(!response.ok)throw new ApiError(typeof result.error==="string"?result.error:"Upload failed",response.status);
+ return result;
+}
