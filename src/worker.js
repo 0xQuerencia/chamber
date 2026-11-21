@@ -106,7 +106,7 @@ async function handleLogin(request, env) {
 }
 async function bootstrap(db, user) {
   const privileged = isPrivileged(user);
-  const [firm, staff, clients, tasks, documents, activity, templates, enrollments] = await Promise.all([
+  const [firm, staff, clients, tasks, documents, activity, templates, enrollments, requirements] = await Promise.all([
     db.prepare("SELECT id,name FROM firms WHERE id=?").bind(user.firm_id).first(),
     db.prepare("SELECT id,name,email,role,active FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
     (privileged
@@ -122,11 +122,13 @@ async function bootstrap(db, user) {
       ? db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id)
       : db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
     db.prepare("SELECT id,name,service,frequency,due_day,ask_by_lead_days,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
-    (privileged?db.prepare("SELECT * FROM service_enrollments WHERE firm_id=?").bind(user.firm_id):db.prepare("SELECT * FROM service_enrollments WHERE firm_id=? AND assignee_id=?").bind(user.firm_id,user.id)).all()
+    (privileged?db.prepare("SELECT * FROM service_enrollments WHERE firm_id=?").bind(user.firm_id):db.prepare("SELECT * FROM service_enrollments WHERE firm_id=? AND assignee_id=?").bind(user.firm_id,user.id)).all(),
+    db.prepare("SELECT id,template_id,name,required,sort_order FROM requirement_templates WHERE firm_id=? ORDER BY sort_order,name").bind(user.firm_id).all()
   ]);
   return output({ firm, user: { id:user.id, name:user.name, email:user.email, role:user.role },
     staff: staff.results, clients: clients.results, tasks: tasks.results,
-    documents: documents.results, activity: activity.results, templates: templates.results, enrollments: enrollments.results });
+    documents: documents.results, activity: activity.results, templates: templates.results, enrollments: enrollments.results,
+    requirements: requirements.results });
 }
 async function validateFirmUser(db, firmId, userId) {
   if (!userId) return true;
