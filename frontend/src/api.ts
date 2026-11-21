@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -61,3 +61,7 @@ export const getInsightDrill=(kind:ReportKind,page=0)=>api<DrillReport>("/api/re
 
 export const getDevices=()=>api<DeviceList>("/api/devices");
 export const revokeDevice=(id:string)=>api<{ok:boolean}>("/api/devices/"+encodeURIComponent(id)+"/revoke","POST",{});
+
+export const getSheetsStatus=()=>api<SheetsStatus>("/api/sheets/status");
+export const connectSheets=(spreadsheetId:string)=>api<{ok:boolean}>("/api/sheets/connect","POST",{spreadsheet_id:spreadsheetId});
+export const disconnectSheets=()=>api<{ok:boolean}>("/api/sheets/disconnect","POST",{});
