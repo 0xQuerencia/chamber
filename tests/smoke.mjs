@@ -358,7 +358,10 @@ assert.equal(configured.completed_stages,5);
 const deliveryReadiness=ok(await call("/api/delivery/readiness"));
 assert.equal(deliveryReadiness.email,false);
 assert.equal(deliveryReadiness.whatsapp,false);
-const noSend=await call("/api/delivery/batches/"+drafted.id+"/queue","POST",{confirm_count:1,confirm_names:"CONFIRM"});
+const outboundDraft=ok(await call("/api/messages/batches","POST",{
+ period:"2026-12",channel:"whatsapp",client_ids:[clientA.id],template_id:requestTemplate.id,confirm_count:1
+}));
+const noSend=await call("/api/delivery/batches/"+outboundDraft.id+"/queue","POST",{confirm_count:1,confirm_names:"CONFIRM"});
 assert.equal(noSend.res.status,503);
 const failedWebhook=await call("/api/webhooks/whatsapp","POST",{object:"whatsapp_business_account",entry:[]},"");
 assert.equal(failedWebhook.res.status,503);
