@@ -102,6 +102,28 @@ assert.equal(snap.tasks.find(t=>t.period==="2026-11")?.ask_by_date,"2026-12-09")
 const taskHistory=ok(await call("/api/tasks/"+task.id+"/history"));
 assert.ok(taskHistory.events.length>=2);
 
+const reviewTask=ok(await call("/api/tasks","POST",{
+  client_id:clientA.id,title:"Review readiness",service:"Audit",
+  period:"2026-11",due_date:"2026-12-20",assignee_id:staff.id,reviewer_id:undefined
+}));
+const tId=reviewTask.id;
+ok(await call("/api/tasks/"+tId+"/assignment","PATCH",{assignee_id:staff.id,reviewer_id:staff.id}));
+const comment=ok(await call("/api/tasks/"+tId+"/comments","POST",{body:"Work started."},staffCookie));
+assert.ok(comment.id);
+const historyComments=ok(await call("/api/tasks/"+tId+"/comments","GET",undefined,staffCookie));
+assert.equal(historyComments.comments.length,1);
+ok(await call("/api/tasks/"+tId+"/timer","POST",{action:"start"},staffCookie));
+const stopped=ok(await call("/api/tasks/"+tId+"/timer","POST",{action:"stop"},staffCookie));
+assert.ok(stopped.minutes>=1);
+const timeLog=ok(await call("/api/tasks/"+tId+"/time","GET",undefined,staffCookie));
+assert.equal(timeLog.entries.length,1);
+ok(await call("/api/tasks/"+tId,"PATCH",{status:"review"},staffCookie));
+const approved=ok(await call("/api/tasks/"+tId+"/review","POST",{decision:"approve",note:"Reviewed"}));
+assert.equal(approved.status,"done");
+const members=ok(await call("/api/workload"));
+assert.ok(members.members.some(m=>m.id===staff.id));
+const deniedWorkload=await call("/api/workload","GET",undefined,staffCookie);
+assert.equal(deniedWorkload.res.status,403);
 const pan="ABCDE1234F";
 const gstinBase="24ABCDE1234F1Z",gstin=gstinBase+gstinCheckCharacter(gstinBase);
 ok(await call("/api/clients/"+clientA.id,"PATCH",{code:"CL-TEST",pan,client_group:"Shah Group"}));

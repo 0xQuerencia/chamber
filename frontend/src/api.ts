@@ -1,4 +1,4 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
 export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
@@ -28,3 +28,12 @@ export const updateClient=(id:string,values:Payload)=>api<{ok:boolean}>("/api/cl
 export const archiveClient=(id:string)=>api<{ok:boolean}>("/api/clients/"+encodeURIComponent(id)+"/archive","POST",{});
 export const addClientContact=(id:string,values:Payload)=>api<{id:string}>("/api/clients/"+encodeURIComponent(id)+"/contacts","POST",values);
 export const addClientGstin=(id:string,gstin:string)=>api<{id:string}>("/api/clients/"+encodeURIComponent(id)+"/gstins","POST",{gstin});
+
+export const getWorkload=()=>api<WorkloadResponse>("/api/workload");
+export const assignTask=(id:string,assigneeId:string|null,reviewerId:string|null)=>api<{ok:boolean}>("/api/tasks/"+encodeURIComponent(id)+"/assignment","PATCH",{assignee_id:assigneeId,reviewer_id:reviewerId});
+export const reviewTask=(id:string,decision:"approve"|"return",note:string)=>api<{ok:boolean;status:string}>("/api/tasks/"+encodeURIComponent(id)+"/review","POST",{decision,note});
+export const getTaskComments=(id:string)=>api<{comments:TaskComment[]}>("/api/tasks/"+encodeURIComponent(id)+"/comments");
+export const addTaskComment=(id:string,body:string)=>api<{id:string}>("/api/tasks/"+encodeURIComponent(id)+"/comments","POST",{body});
+export const getTaskHistory=(id:string)=>api<{events:TaskHistoryEvent[]}>("/api/tasks/"+encodeURIComponent(id)+"/history");
+export const toggleTaskTimer=(id:string,action:"start"|"stop")=>api<{ok:boolean;running:boolean;minutes?:number}>("/api/tasks/"+encodeURIComponent(id)+"/timer","POST",{action});
+export const getTaskTime=(id:string)=>api<{entries:TimerEntry[]}>("/api/tasks/"+encodeURIComponent(id)+"/time");

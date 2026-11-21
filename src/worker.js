@@ -2,6 +2,7 @@ import { clean, validEmail, safeStatus, statusForRole, csvCell } from "./validat
 import { validCalendarDate, shiftCalendarDays } from "./domain.js";
 import { handleWorkflow } from "./tracker.js";
 import { handleClientMaster } from "./clients.js";
+import { handleWork } from "./work.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 
 const enc = new TextEncoder();
@@ -189,8 +190,8 @@ async function handleUpdateTask(taskId, data, env, user) {
   const at=iso();
   const completed=status==="done"?(previous.completed_at||at):null;
   await env.DB.batch([
-    env.DB.prepare("UPDATE tasks SET status=?,assignee_id=?,notes=?,updated_at=?,completed_at=? WHERE id=? AND firm_id=?")
-      .bind(status,assignee||null,notes,at,completed,taskId,user.firm_id),
+    env.DB.prepare("UPDATE tasks SET status=?,assignee_id=?,notes=?,updated_at=?,completed_at=?,completed_by=? WHERE id=? AND firm_id=?")
+      .bind(status,assignee||null,notes,at,completed,status==="done"?(previous.completed_by||user.id):null,taskId,user.firm_id),
     env.DB.prepare("INSERT INTO task_events(id,firm_id,task_id,actor_id,from_status,to_status,note,at) VALUES(?,?,?,?,?,?,?,?)")
       .bind(id(),user.firm_id,taskId,user.id,previous.status,status,assignee!==previous.assignee_id?"Assignee changed":null,at),
     await audit(env.DB,user,"updated","task",taskId,{from:previous.status,to:status,assignee_changed:assignee!==previous.assignee_id})
@@ -395,6 +396,8 @@ async function api(request,env) {
     if(path==="/api/enrollments"&&method==="POST") return handleEnroll(await bodyJSON(request),env,user);
     if(path==="/api/recurrence"&&method==="POST") return handleGenerate(await bodyJSON(request),env,user);
     if(path==="/api/export"&&method==="GET") return handleExport(request,env,user);
+    if(path==="/api/workload" || /^\/api\/tasks\/[a-f0-9-]+\/(?:assignment|review|comments|timer|time)$/.test(path))
+      return handleWork(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validateFirmUser});
     if(["/api/requirements","/api/overrides","/api/tracker","/api/tracker/detail","/api/inward"].includes(path) ||
        /^\/api\/tasks\/[a-f0-9-]+\/history$/.test(path))
       return handleWorkflow(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON});
