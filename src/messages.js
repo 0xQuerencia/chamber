@@ -45,13 +45,13 @@ export async function handleMessages(request,env,user,deps){
    const unique=[...new Set(missing.map(x=>x.name))];
    const values={client:client.name,month:period,missing_list:unique.map((x,i)=>(i+1)+". "+x).join("\n"),due:earliest};
    const text=body.replace(/\{(client|month|missing_list|due)\}/g,(_,key)=>values[key]??"");
-   previews.push({client_id:cid,client_name:client.name,eligible:true,reason:null,recipient,contact_id:contact?.id??null,missing_count:missing.length,body:text});
+   previews.push({client_id:cid,client_name:client.name,eligible:true,reason:null,recipient,contact_id:contact?.id??null,missing_count:missing.length,body:text,vars:[values.client,values.month,values.missing_list,values.due]});
   }
   return {channel,period,previews,eligible:previews.filter(p=>p.eligible).length,skipped:previews.filter(p=>!p.eligible).length};
  }
 
  if(path==="/api/messages/templates"&&method==="GET"){
-  const templates=(await db.prepare("SELECT id,name,channel,category,body,approval_status,active FROM message_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all()).results;
+  const templates=(await db.prepare("SELECT id,name,channel,category,body,approval_status,provider_template_id,language_code,active FROM message_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all()).results;
   return output({templates});
  }
  if(path==="/api/messages/templates"&&method==="POST"){
@@ -67,6 +67,23 @@ export async function handleMessages(request,env,user,deps){
   return output({id:tid},201);
  }
 
+ const providerUpdate=path.match(/^\/api\/messages\/templates\/([a-f0-9-]+)\/provider$/);
+ if(providerUpdate&&method==="PUT"){
+  if(user.role!=="principal")return fail("Only principal may configure approved WhatsApp templates",403);
+  const data=await bodyJSON(request),templateName=clean(data.provider_template_id,100),
+   language=clean(data.language_code||"en_US",16);
+  if(!/^[a-z0-9_]{1,100}$/.test(templateName)||!/^[a-z]{2,3}(_[A-Z]{2})?$/.test(language)||
+    data.confirm_approved!==true)return fail("Enter the approved Meta template name, language and confirm approval",400);
+  const current=await db.prepare("SELECT id FROM message_templates WHERE firm_id=? AND id=? AND channel='whatsapp' AND active=1")
+   .bind(user.firm_id,providerUpdate[1]).first();
+  if(!current)return fail("WhatsApp template not found",404);
+  await db.batch([
+   db.prepare("UPDATE message_templates SET provider_template_id=?,language_code=?,approval_status='approved' WHERE firm_id=? AND id=?")
+    .bind(templateName,language,user.firm_id,current.id),
+   await audit(db,user,"configured","message_template",current.id,{provider_template_id:templateName,approval_claimed:true})
+  ]);
+  return output({ok:true,note:"Approved status was attested by the principal; Meta validates it during sending"});
+ }
  if(path==="/api/messages/preview"&&method==="POST"){
   const result=await preview(await bodyJSON(request));
   return result.error?fail(result.error):output(result);
@@ -80,10 +97,10 @@ export async function handleMessages(request,env,user,deps){
    return fail("Confirmed recipient count differs from latest preview",409);
   const at=iso(),bid=id(),entries=result.previews.filter(p=>p.eligible);
   await db.batch([
-   db.prepare("INSERT INTO message_batches(id,firm_id,created_by,channel,period,status,recipient_count,created_at) VALUES(?,?,?,?,?,'draft',?,?)")
-    .bind(bid,user.firm_id,user.id,result.channel,result.period,entries.length,at),
-   ...entries.map(p=>db.prepare("INSERT INTO messages(id,firm_id,batch_id,client_id,contact_id,channel,recipient,body,status,created_at,last_status_at) VALUES(?,?,?,?,?,?,?,?,'draft',?,?)")
-    .bind(id(),user.firm_id,bid,p.client_id,p.contact_id,result.channel,p.recipient,p.body,at,at)),
+   db.prepare("INSERT INTO message_batches(id,firm_id,created_by,channel,period,status,recipient_count,created_at,template_id) VALUES(?,?,?,?,?,'draft',?,?,?)")
+    .bind(bid,user.firm_id,user.id,result.channel,result.period,entries.length,at,clean(data.template_id,100)||null),
+   ...entries.map(p=>db.prepare("INSERT INTO messages(id,firm_id,batch_id,client_id,contact_id,channel,recipient,body,status,created_at,last_status_at,template_params) VALUES(?,?,?,?,?,?,?,?,'draft',?,?,?)")
+    .bind(id(),user.firm_id,bid,p.client_id,p.contact_id,result.channel,p.recipient,p.body,at,at,JSON.stringify(p.vars))),
    await audit(db,user,"drafted","message_batch",bid,{channel:result.channel,recipient_count:entries.length,period:result.period})
   ]);
   return output({id:bid,status:"draft",recipient_count:entries.length,skipped:result.skipped,delivery_enabled:false},201);
@@ -91,13 +108,13 @@ export async function handleMessages(request,env,user,deps){
 
  if(path==="/api/messages/batches"&&method==="GET"){
   const mine=user.role==="manager";
-  const batches=(await db.prepare("SELECT id,channel,period,status,recipient_count,created_at FROM message_batches WHERE firm_id=? "+(mine?"AND created_by=? ":"")+"ORDER BY created_at DESC LIMIT 30")
+  const batches=(await db.prepare("SELECT id,channel,period,status,recipient_count,created_at,scheduled_at,queued_at FROM message_batches WHERE firm_id=? "+(mine?"AND created_by=? ":"")+"ORDER BY created_at DESC LIMIT 30")
    .bind(...(mine?[user.firm_id,user.id]:[user.firm_id])).all()).results;
   return output({batches,delivery_enabled:false});
  }
  const match=path.match(/^\/api\/messages\/batches\/([a-f0-9-]+)(?:\/cancel)?$/);
  if(match){
-  const batch=await db.prepare("SELECT id,channel,period,status,recipient_count FROM message_batches WHERE firm_id=? AND id=? "+(user.role==="manager"?"AND created_by=?":""))
+  const batch=await db.prepare("SELECT id,channel,period,status,recipient_count,scheduled_at,queued_at FROM message_batches WHERE firm_id=? AND id=? "+(user.role==="manager"?"AND created_by=?":""))
    .bind(...(user.role==="manager"?[user.firm_id,match[1],user.id]:[user.firm_id,match[1]])).first();
   if(!batch)return fail("Batch not found",404);
   if(path.endsWith("/cancel")&&method==="POST"){
@@ -111,7 +128,7 @@ export async function handleMessages(request,env,user,deps){
   }
   if(!path.endsWith("/cancel")&&method==="GET"){
    const scope=clientScope(user,"c");
-   const messages=(await db.prepare("SELECT m.id,m.client_id,c.name AS client_name,m.contact_id,m.recipient,m.body,m.status,m.error FROM messages m JOIN clients c ON c.id=m.client_id AND c.firm_id=m.firm_id WHERE m.firm_id=? AND m.batch_id=? AND "+scope.sql+" ORDER BY c.name")
+   const messages=(await db.prepare("SELECT m.id,m.client_id,c.name AS client_name,m.contact_id,m.recipient,m.body,m.status,m.error,m.sent_at,m.delivered_at,m.read_at,m.send_attempts FROM messages m JOIN clients c ON c.id=m.client_id AND c.firm_id=m.firm_id WHERE m.firm_id=? AND m.batch_id=? AND "+scope.sql+" ORDER BY c.name")
     .bind(user.firm_id,batch.id,...scope.args).all()).results;
    return output({batch,messages,delivery_enabled:false});
   }
