@@ -358,6 +358,10 @@ assert.equal(configured.completed_stages,5);
 const deliveryReadiness=ok(await call("/api/delivery/readiness"));
 assert.equal(deliveryReadiness.email,false);
 assert.equal(deliveryReadiness.whatsapp,false);
+const requestTemplate=ok(await call("/api/messages/templates","POST",{
+ name:"Monthly document request",channel:"whatsapp",
+ body:"Hello {client}, please supply {missing_list} for {month} by {due}."
+}));
 const outboundDraft=ok(await call("/api/messages/batches","POST",{
  period:"2026-12",channel:"whatsapp",client_ids:[clientA.id],template_id:requestTemplate.id,confirm_count:1
 }));
