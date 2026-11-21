@@ -6,3 +6,7 @@ node_modules/
 .DS_Store
 coverage/
 *.log
+wrangler.staging.jsonc
+.dev.vars*
+test-results/
+playwright-report/

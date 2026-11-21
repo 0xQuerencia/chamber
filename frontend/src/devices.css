@@ -1,0 +1,23 @@
+/* Active-device and session administration within Chamber Settings. */
+.devices-panel{background:#fff;border:1px solid #d6e2ec;margin-top:16px;color:#223b53}
+.devices-panel>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px;border-bottom:1px solid #dfe8f0}
+.devices-panel h2{font-size:14px;display:flex;align-items:center;gap:7px;margin:0;color:#1d3a55}
+.devices-panel header p{font-size:11px;line-height:1.5;color:#718396;margin:6px 0 0}
+.devices-panel header button{background:#fff;border:1px solid #c9d4de;cursor:pointer;padding:6px;color:#355e78;border-radius:3px}
+.devices-policy{display:flex;align-items:center;gap:8px;background:#f2f6fa;border-bottom:1px solid #dce7ef;padding:10px 14px;font-size:11px;color:#4a6981;line-height:1.5}
+.devices-policy svg{flex-shrink:0}
+.devices-muted{padding:10px 14px;font-size:11px;color:#667f92;margin:0}
+.devices-notice{font-size:11px;padding:10px 14px;color:#196e51;margin:0}
+.devices-table-scroll{overflow:auto}
+.devices-table{width:100%;border-collapse:collapse;min-width:720px;font-size:12px}
+.devices-table th{background:#f1f5f9;color:#526e82;font-size:10px;text-align:left}
+.devices-table td,.devices-table th{border-bottom:1px solid #e4ebf1;padding:10px 12px;vertical-align:top}
+.devices-name{display:flex;align-items:center;gap:5px}
+.devices-name strong{font-size:12px}.devices-name small{background:#e0f2e7;color:#1a6d4c;font-size:10px;padding:2px 5px;margin-left:4px}
+.devices-agent{display:block;color:#75889a;font-size:10px;margin-top:6px;max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devices-active,.devices-revoked{display:flex;align-items:center;gap:5px;font-size:11px}
+.devices-active{color:#267653}.devices-revoked{color:#a54842}
+.devices-table td button{background:white;border:1px solid #c8d6e1;color:#9a3a36;border-radius:3px;padding:6px 10px;font-size:11px;cursor:pointer}
+.devices-table td button:disabled{opacity:.45;cursor:default}
+.devices-table td button:focus-visible,.devices-panel header button:focus-visible{outline:2px solid #2a73a0;outline-offset:2px}
+.devices-footnote{padding:10px 14px;background:#fafbfd;color:#667b8b;font-size:11px;display:flex;align-items:center;gap:7px}

@@ -1,0 +1,19 @@
+/* Central keyboard-help overlay. */
+.keyboard-backdrop{position:fixed;inset:0;z-index:1500;background:rgba(12,26,40,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+.keyboard-dialog{width:min(780px,100%);max-height:min(88vh,860px);display:flex;flex-direction:column;background:#fff;border:1px solid #c4d2de;box-shadow:0 20px 60px rgba(9,24,37,.25);color:#192f42}
+.keyboard-dialog>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px;border-bottom:1px solid #dfe7ee;background:#f3f6f9}
+.keyboard-dialog>header>div{display:flex;align-items:center;gap:10px}
+.keyboard-dialog>header h2{font-size:17px;margin:0}
+.keyboard-dialog>header p{font-size:11px;color:#708193;margin:4px 0 0}
+.keyboard-dialog>header button{background:transparent;border:0;color:#526d82;cursor:pointer;padding:5px}
+.keyboard-dialog>header button:focus-visible{outline:2px solid #1f6f9d}
+.keyboard-guide{overflow:auto;padding:15px 17px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.keyboard-guide h3{font-size:11px;color:#52728d;text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px}
+.keyboard-rows{border:1px solid #e3eaf0}
+.keyboard-entry{display:grid;grid-template-columns:104px minmax(0,1fr);gap:9px;align-items:start;padding:9px;border-bottom:1px solid #ebeff3}
+.keyboard-entry:last-child{border-bottom:0}
+.keyboard-dialog kbd{background:#e9eff5;border:1px solid #cbd7e1;border-bottom-width:2px;border-radius:4px;padding:3px 6px;font-size:10px;color:#1c4869;font-family:monospace;font-weight:600;width:max-content}
+.keyboard-entry strong{display:block;font-size:12px;font-weight:600}
+.keyboard-entry small{display:block;font-size:10px;color:#748598;line-height:1.4;margin-top:3px}
+.keyboard-dialog footer{border-top:1px solid #e2e8ee;padding:12px 17px;font-size:11px;color:#718396;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+@media(max-width:600px){.keyboard-guide{grid-template-columns:minmax(0,1fr)}.keyboard-entry{grid-template-columns:92px minmax(0,1fr)}}

@@ -1,0 +1,37 @@
+/* Firm calendar editor: accounting-first, source-aware. */
+.compliance-rules{margin:12px 14px 18px;min-width:0}
+.compliance-rule-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:9px}
+.compliance-rule-heading h2{font-size:15px;display:flex;align-items:center;gap:7px;margin:0;color:#12202F}
+.compliance-rule-warning{background:#FBE5BD;border:1px solid #E7CA91;color:#5E3E00;display:flex;gap:10px;padding:11px;border-radius:5px;line-height:1.5;margin:9px 0 12px}
+.compliance-rule-warning p{font-size:12px;margin:0}.compliance-rule-warning svg{flex-shrink:0}
+.compliance-rule-grid{display:grid;grid-template-columns:minmax(270px,.9fr) minmax(300px,1.1fr);gap:12px}
+.compliance-rule-panel{background:white;border:1px solid #DDD8CB;border-radius:6px;padding:14px;min-width:0}
+.compliance-rule-panel>h3{font-size:13px;margin:0 0 8px}
+.compliance-starter-list{border:1px solid #E6E2DA;max-height:320px;overflow:auto;margin:9px 0}
+.compliance-starter-list label{display:flex;align-items:center;gap:8px;border-bottom:1px solid #ECE8E1;padding:9px;cursor:pointer}
+.compliance-starter-list label:last-child{border:0}
+.compliance-starter-list input{accent-color:#1F6F5C;width:15px;height:15px}
+.compliance-starter-list strong{display:block;font-size:12px}
+.compliance-starter-list small{display:block;color:#566B76;font-size:10px;margin-top:4px}
+.compliance-starter-list label>span{flex:1}
+.compliance-starter-list label.installed{background:#F0F7F1;color:#1F6F5C;cursor:default}
+.compliance-rule-panel .tracker-btn.primary{width:max-content;margin:0}
+.compliance-field{display:grid;gap:4px;font-size:11px;color:#52636D;font-weight:600;min-width:0}
+.compliance-field input,.compliance-field select,.compliance-field textarea{background:#fff;border:1px solid #C9C8C0;color:#12202F;padding:7px 8px;font:12px inherit;border-radius:4px;width:100%;min-height:34px}
+.compliance-field:focus-within input,.compliance-field:focus-within select,.compliance-field:focus-within textarea{outline:2px solid #1F6F5C;outline-offset:1px}
+.compliance-form{display:grid;gap:11px;margin:12px 0}
+.compliance-inline{display:flex;gap:10px;align-items:flex-end}
+.compliance-inline>*{flex:1}
+.compliance-inline button{flex:0 0 auto}
+.compliance-verify{display:flex;align-items:flex-start;gap:8px;font-size:11px;line-height:1.5;color:#2E503F}
+.compliance-verify input{accent-color:#1F6F5C;flex-shrink:0}
+.compliance-preview{background:#E5F0E8;border:1px solid #C8DACA;color:#1F6F5C;padding:8px 9px;display:flex;align-items:center;gap:6px;font-size:12px}
+.compliance-holidays{margin-top:12px}
+.compliance-holiday-form{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.compliance-holiday-form .compliance-field{min-width:170px;flex:1}
+.compliance-holiday-list{max-height:200px;overflow:auto;margin:12px 0}
+.compliance-holiday-list>div{display:flex;align-items:center;gap:9px;border-top:1px solid #E7E4DD;padding:8px 0;font-size:11px}
+.compliance-holiday-list span{flex:1;min-width:0}
+.compliance-holiday-list button{border:1px solid #DFBBB5;color:#85190E;background:#fff;padding:5px 8px;border-radius:4px}
+@media(max-width:1000px){.compliance-rule-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:560px){.compliance-inline{flex-direction:column;align-items:stretch}.compliance-holiday-form{align-items:stretch}}

@@ -11,12 +11,12 @@ Requires Node.js 22 and the Cloudflare Wrangler CLI.
 5. For initial local bootstrap, configure a non-production token in `.dev.vars`: `SETUP_TOKEN=some-long-random-one-time-value`.
 6. Open the first-run setup form and provide that token. Do not commit it.
 
-The checked-in `wrangler.jsonc` contains an **unusable placeholder database UUID**. This permits local development but must be replaced before remote deployment.
+**WARNING:** The checked-in `wrangler.jsonc` already points to the existing `chamber-db` deployment. Its database UUID is **not** a placeholder. Do not run `--remote` migrations or deploy this PR stack to that Worker as a staging test. Use the separate `wrangler.staging.example.jsonc` procedure in `docs/release-acceptance.md` instead.
 
 ## New remote environment
 
-1. Create a dedicated D1 database: `npx wrangler d1 create chamber-db`.
-2. Replace the placeholder `database_id` in `wrangler.jsonc` with the returned UUID.
+1. Provision a separate D1 database and Worker for **staging**, using a local copy of `wrangler.staging.example.jsonc`.
+2. Enter that new database UUID only in the local staging configuration; never overwrite the existing production UUID.
 3. Store an unpredictable setup token in Cloudflare secrets: `npx wrangler secret put SETUP_TOKEN`. Prefer 32+ random bytes, securely generated.
 4. Apply migrations: `npx wrangler d1 migrations apply DB --remote`.
 5. Deploy: `npx wrangler deploy`.
@@ -33,3 +33,7 @@ The checked-in `wrangler.jsonc` contains an **unusable placeholder database UUID
 - `POST /api/login` issues a Secure, HttpOnly, SameSite=Strict cookie over HTTPS.
 - All business endpoints require an authenticated session and firm scoping.
 - Browser mutation requests must originate from the same origin.
+
+## TOTP for privileged users
+
+Before a production deployment, create a fresh **32-byte random key** and set its base64 value as the Worker secret `MFA_ENCRYPTION_KEY` (via the host's secret manager). Do not commit it to Git or reuse the public CI-only fixture. Principals and managers cannot receive a session cookie from password login without configuring this secret and completing authenticator enrollment/verification. Keep an encrypted backup of the key in the firm's approved recovery process: losing the key makes existing encrypted MFA enrollments unreadable. Do not deploy this migration before testing the enrollment and device-revocation flow in staging.

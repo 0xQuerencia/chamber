@@ -1,7 +1,28 @@
 import { clean, validEmail, safeStatus, statusForRole, csvCell } from "./validation.js";
+import { validCalendarDate, shiftCalendarDays } from "./domain.js";
+import { handleWorkflow } from "./tracker.js";
+import { handleClientMaster } from "./clients.js";
+import { handleWork } from "./work.js";
+import { handleImports } from "./imports.js";
+import { handleMessages } from "./messages.js";
+import { handleReports } from "./reports.js";
+import { handleSheetSettings, scheduledSheetSync } from "./sheets.js";
+import { handleFiles, scanCallback } from "./files.js";
+import { handleReminderApi, refreshReminderSuggestions } from "./reminders.js";
+import {beginMfaChallenge,handleMfa} from "./mfa.js";
+import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
+import {clientScope,canReadClient,validClientManager} from "./permissions.js";
+import {handleSecurity} from "./security.js";
+import {handleOnboarding} from "./onboarding.js";
+import {handleDelivery,drainDeliveryQueue} from "./delivery.js";
+import {handleWhatsAppWebhook} from "./delivery-webhooks.js";
+import {handlePortalLinks,handlePublicPortal,handlePortalNotifications} from "./portal.js";
+import {handleCompliance} from "./compliance.js";
+import {planningRule} from "./compliance-domain.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
+const SESSION_IDLE_MINUTES = 30;
 const iso = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
 const fail = (message, code = 400) => output({ error: message }, code);
@@ -47,16 +68,27 @@ function assertOrigin(request) {
   return origin === expected;
 }
 async function sessionFor(request, db) {
-  const cookie = (request.headers.get("Cookie") || "").split(";").map(x => x.trim()).find(x => x.startsWith("chamber_session="));
-  if (!cookie) return null;
-  const token = cookie.slice("chamber_session=".length);
-  if (!/^[a-f0-9]{64}$/.test(token)) return null;
-  return db.prepare("SELECT u.id,u.firm_id,u.name,u.email,u.role,u.active FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1")
-    .bind(await hashToken(token), iso()).first();
+  const cookie=(request.headers.get("Cookie")||"").split(";").map(x=>x.trim()).find(x=>x.startsWith("chamber_session="));
+  if(!cookie)return null;
+  const token=cookie.slice("chamber_session=".length);
+  if(!/^[a-f0-9]{64}$/.test(token))return null;
+  const tokenHash=await hashToken(token),now=iso();
+  const idleCutoff=new Date(Date.now()-SESSION_IDLE_MINUTES*60000).toISOString();
+  const row=await db.prepare("SELECT u.id,u.firm_id,u.name,u.email,u.role,u.active,s.device_id,s.last_active_at FROM sessions s JOIN users u ON s.user_id=u.id LEFT JOIN devices d ON d.id=s.device_id AND d.user_id=u.id AND d.firm_id=u.firm_id WHERE s.token_hash=? AND s.expires_at>? AND COALESCE(s.last_active_at,s.created_at)>? AND u.active=1 AND (s.device_id IS NULL OR (d.id IS NOT NULL AND d.revoked_at IS NULL))")
+   .bind(tokenHash,now,idleCutoff).first();
+  if(!row)return null;
+  if(!row.last_active_at||row.last_active_at<new Date(Date.now()-60000).toISOString()){
+   const updates=[db.prepare("UPDATE sessions SET last_active_at=? WHERE token_hash=?").bind(now,tokenHash)];
+   if(row.device_id)updates.push(db.prepare("UPDATE devices SET last_seen_at=? WHERE id=? AND firm_id=?").bind(now,row.device_id,row.firm_id));
+   await db.batch(updates);
+  }
+  return row;
 }
-async function audit(db, user, event, entityType, entityId, details = {}) {
-  return db.prepare("INSERT INTO activity (id,firm_id,actor_id,event,entity_type,entity_id,details,at) VALUES (?,?,?,?,?,?,?,?)")
-    .bind(id(), user.firm_id, user.id, event, entityType, entityId, JSON.stringify(details), iso());
+const SECURITY_ACTIONS=new Set(["signed_in","signed_out","exported","revoked","configured","disconnected","mfa_enrolled","mfa_verified","access_denied","sign_in_failed","viewed_sensitive","downloaded"]);
+async function audit(db,user,event,entityType,entityId,details={}){
+  const eventClass=SECURITY_ACTIONS.has(event)?"security":"work";
+  return db.prepare("INSERT INTO activity (id,firm_id,actor_id,event,entity_type,entity_id,details,at,event_class) VALUES (?,?,?,?,?,?,?,?,?)")
+    .bind(id(),user.firm_id,user.id,event,entityType,entityId,JSON.stringify(details),iso(),eventClass);
 }
 async function handleSetup(request, env) {
   const existing = await env.DB.prepare("SELECT COUNT(*) as n FROM users").first();
@@ -89,39 +121,64 @@ async function handleLogin(request, env) {
     const count = (guard?.failures || 0) + 1;
     const lockUntil = count >= 5 ? new Date(Date.now() + 15 * 60000).toISOString() : null;
     await env.DB.prepare("INSERT INTO login_attempts(email,failures,lock_until) VALUES (?,?,?) ON CONFLICT(email) DO UPDATE SET failures=excluded.failures,lock_until=excluded.lock_until")
-      .bind(email, count, lockUntil).run();
-    return fail("Invalid email or password", 401);
+      .bind(email,count,lockUntil).run();
+    if(user)await (await audit(env.DB,user,"sign_in_failed","user",user.id,{locked:count>=5})).run();
+    return fail("Invalid email or password",401);
   }
   await env.DB.prepare("DELETE FROM login_attempts WHERE email=?").bind(email).run();
-  const token = [...crypto.getRandomValues(new Uint8Array(32))].map(v => v.toString(16).padStart(2, "0")).join("");
-  await env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)")
-    .bind(await hashToken(token), user.id, new Date(Date.now() + SESSION_DAYS * 86400000).toISOString(), iso()).run();
-  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  return output({ ok: true }, 200, { "Set-Cookie": "chamber_session=" + token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800" + secure });
+  if(isPrivileged(user)){
+    if(!env.MFA_ENCRYPTION_KEY)return fail("MFA deployment secret is not configured",503);
+    return beginMfaChallenge(env,user,{output,hashToken,iso});
+  }
+  return issueSession(request,env,user,data.device_label);
 }
-async function bootstrap(db, user) {
-  const privileged = isPrivileged(user);
-  const [firm, staff, clients, tasks, documents, activity, templates, enrollments] = await Promise.all([
-    db.prepare("SELECT id,name FROM firms WHERE id=?").bind(user.firm_id).first(),
-    db.prepare("SELECT id,name,email,role,active FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
-    (privileged
-      ? db.prepare("SELECT * FROM clients WHERE firm_id=? ORDER BY name").bind(user.firm_id)
-      : db.prepare("SELECT DISTINCT c.* FROM clients c JOIN tasks t ON c.id=t.client_id WHERE c.firm_id=? AND t.firm_id=? AND t.assignee_id=? ORDER BY c.name").bind(user.firm_id,user.firm_id,user.id)).all(),
-    (privileged
-      ? db.prepare("SELECT * FROM tasks WHERE firm_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id)
-      : db.prepare("SELECT * FROM tasks WHERE firm_id=? AND assignee_id=? ORDER BY due_date ASC,created_at DESC LIMIT 2000").bind(user.firm_id,user.id)).all(),
-    (privileged
-      ? db.prepare("SELECT * FROM documents WHERE firm_id=? ORDER BY updated_at DESC LIMIT 3000").bind(user.firm_id)
-      : db.prepare("SELECT d.* FROM documents d JOIN tasks t ON t.id=d.task_id AND t.firm_id=d.firm_id WHERE d.firm_id=? AND t.assignee_id=? ORDER BY d.updated_at DESC LIMIT 3000").bind(user.firm_id,user.id)).all(),
-    (privileged
-      ? db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id)
-      : db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
-    db.prepare("SELECT id,name,service,frequency,due_day,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
-    (privileged?db.prepare("SELECT * FROM service_enrollments WHERE firm_id=?").bind(user.firm_id):db.prepare("SELECT * FROM service_enrollments WHERE firm_id=? AND assignee_id=?").bind(user.firm_id,user.id)).all()
+
+async function issueSession(request,env,user,deviceLabel){
+  const token=[...crypto.getRandomValues(new Uint8Array(32))].map(v=>v.toString(16).padStart(2,"0")).join("");
+  const deviceId=id(),at=iso(),label=clean(deviceLabel,80)||"Browser session";
+  const agent=clean(request.headers.get("User-Agent")||"Unknown browser",180);
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO devices(id,firm_id,user_id,label,user_agent,first_seen_at,last_seen_at) VALUES (?,?,?,?,?,?,?)")
+      .bind(deviceId,user.firm_id,user.id,label,agent,at,at),
+    env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,created_at,device_id,last_active_at) VALUES (?,?,?,?,?,?)")
+      .bind(await hashToken(token),user.id,new Date(Date.now()+SESSION_DAYS*86400000).toISOString(),at,deviceId,at),
+    await audit(env.DB,user,"signed_in","device",deviceId,{label})
   ]);
-  return output({ firm, user: { id:user.id, name:user.name, email:user.email, role:user.role },
-    staff: staff.results, clients: clients.results, tasks: tasks.results,
-    documents: documents.results, activity: activity.results, templates: templates.results, enrollments: enrollments.results });
+  const secure=new URL(request.url).protocol==="https:"?"; Secure":"";
+  return output({ok:true},200,{"Set-Cookie":"chamber_session="+token+"; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800"+secure});
+}
+async function bootstrap(db,user){
+  const scope=clientScope(user,"c");
+  const principal=user.role==="principal",staffOnly=user.role==="staff",manager=user.role==="manager";
+  const [firm,staff,clients,tasks,documents,activity,templates,enrollments,requirements]=await Promise.all([
+   db.prepare("SELECT id,name FROM firms WHERE id=?").bind(user.firm_id).first(),
+   (principal?db.prepare("SELECT id,name,email,role,active,manager_id FROM users WHERE firm_id=? ORDER BY name").bind(user.firm_id):
+    manager?db.prepare("SELECT id,name,email,role,active,manager_id FROM users WHERE firm_id=? AND (id=? OR manager_id=?) ORDER BY name").bind(user.firm_id,user.id,user.id):
+    db.prepare("SELECT id,name,email,role,active,manager_id FROM users WHERE firm_id=? AND id=?").bind(user.firm_id,user.id)).all(),
+   db.prepare("SELECT "+(staffOnly?"c.id,c.name,c.category,c.code,c.email,c.phone,c.created_at,c.updated_at,NULL AS pan,NULL AS gstin,NULL AS notes":"c.*")+
+     " FROM clients c WHERE c.firm_id=? AND c.archived_at IS NULL AND "+scope.sql+" ORDER BY c.name")
+    .bind(user.firm_id,...scope.args).all(),
+   db.prepare("SELECT t.* FROM tasks t JOIN clients c ON c.id=t.client_id AND c.firm_id=t.firm_id "+
+    "WHERE t.firm_id=? AND "+scope.sql+(staffOnly?" AND t.assignee_id=?":"")+" ORDER BY t.due_date ASC,t.created_at DESC LIMIT 2000")
+    .bind(user.firm_id,...scope.args,...(staffOnly?[user.id]:[])).all(),
+   db.prepare("SELECT d.* FROM documents d JOIN tasks t ON t.id=d.task_id AND t.firm_id=d.firm_id "+
+    "JOIN clients c ON c.id=d.client_id AND c.firm_id=d.firm_id WHERE d.firm_id=? AND "+scope.sql+
+    (staffOnly?" AND t.assignee_id=?":"")+" ORDER BY d.updated_at DESC LIMIT 3000")
+    .bind(user.firm_id,...scope.args,...(staffOnly?[user.id]:[])).all(),
+   (principal?db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id):
+    db.prepare("SELECT a.*,u.name AS actor_name FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.firm_id=? AND a.actor_id=? ORDER BY a.at DESC LIMIT 200").bind(user.firm_id,user.id)).all(),
+   db.prepare("SELECT id,name,service,frequency,due_day,ask_by_lead_days,active FROM service_templates WHERE firm_id=? ORDER BY name").bind(user.firm_id).all(),
+   db.prepare("SELECT e.* FROM service_enrollments e JOIN clients c ON c.id=e.client_id AND c.firm_id=e.firm_id WHERE e.firm_id=? AND "+scope.sql+(staffOnly?" AND e.assignee_id=?":""))
+    .bind(user.firm_id,...scope.args,...(staffOnly?[user.id]:[])).all(),
+   db.prepare("SELECT id,template_id,name,required,sort_order FROM requirement_templates WHERE firm_id=? ORDER BY sort_order,name").bind(user.firm_id).all()
+  ]);
+  if(isPrivileged(user)&&clients.results.length){
+    await (await audit(db,user,"viewed_sensitive","client_register",user.firm_id,{records:clients.results.length})).run();
+  }
+  return output({firm,user:{id:user.id,name:user.name,email:user.email,role:user.role},
+   staff:staff.results,clients:clients.results,tasks:tasks.results,documents:documents.results,
+   activity:activity.results,templates:templates.results,enrollments:enrollments.results,
+   requirements:requirements.results});
 }
 async function validateFirmUser(db, firmId, userId) {
   if (!userId) return true;
@@ -129,12 +186,21 @@ async function validateFirmUser(db, firmId, userId) {
 }
 async function handleCreateClient(data, env, user) {
   if (!isPrivileged(user)) return fail("Insufficient permission",403);
-  const name = clean(data.name, 150), email = clean(data.email, 200), category = clean(data.category || "Business", 50);
-  if (!name || (email && !validEmail(email))) return fail("Client name and valid email required");
-  const clientId=id(), at=iso();
+  const name=clean(data.name,150),email=clean(data.email,200),category=clean(data.category||"Business",50);
+  const pan=normalizeIdentifier(clean(data.pan,20)),gstin=normalizeIdentifier(clean(data.gstin,20));
+  const phone=clean(data.phone,30),code=clean(data.code,40).toUpperCase(),group=clean(data.client_group,120);
+  const manager=user.role==="manager"?user.id:clean(data.manager_id,100);
+  if(!name||(email&&!validEmail(email))||(pan&&!validPan(pan))||(gstin&&!validGstin(gstin))||
+     !validClientPhone(phone)||(code&&!/^[-A-Z0-9_]+$/.test(code)))
+    return fail("Check client name, email, PAN, GSTIN, phone and code");
+  if(manager&&!(await validClientManager(env.DB,user.firm_id,manager)))return fail("Manager not found in firm");
+  const duplicate=await env.DB.prepare("SELECT id FROM clients WHERE firm_id=? AND archived_at IS NULL AND ( (pan=? AND ?!='') OR (gstin=? AND ?!='') OR (code=? AND ?!='')) LIMIT 1")
+    .bind(user.firm_id,pan,pan,gstin,gstin,code,code).first();
+  if(duplicate)return fail("Duplicate client PAN, GSTIN or code",409);
+  const clientId=id(),at=iso(),clientCode=code||"CL-"+clientId.slice(0,8).toUpperCase();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO clients(id,firm_id,name,category,pan,gstin,email,phone,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(clientId,user.firm_id,name,category,clean(data.pan,20),clean(data.gstin,20),email,clean(data.phone,30),clean(data.notes,1000),at,at),
+    env.DB.prepare("INSERT INTO clients(id,firm_id,name,category,pan,gstin,email,phone,notes,code,client_group,manager_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(clientId,user.firm_id,name,category,pan||null,gstin||null,email||null,phone||null,clean(data.notes,1000)||null,clientCode,group||null,manager||null,at,at),
     await audit(env.DB,user,"created","client",clientId)
   ]);
   return output({ id:clientId },201);
@@ -143,16 +209,26 @@ async function handleCreateTask(data, env, user) {
   if (!isPrivileged(user)) return fail("Insufficient permission",403);
   const clientId=clean(data.client_id,100), title=clean(data.title,180), service=clean(data.service,80);
   const client=await env.DB.prepare("SELECT id FROM clients WHERE firm_id=? AND id=?").bind(user.firm_id,clientId).first();
-  if (!client || !title || !service) return fail("Valid client, title and service required");
+  if (!client || !title || !service || !(await canReadClient(env.DB,user,clientId))) return fail("Valid accessible client, title and service required");
   const assignee=clean(data.assignee_id,80), reviewer=clean(data.reviewer_id,80);
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee)) || !(await validateFirmUser(env.DB,user.firm_id,reviewer))) return fail("Assignee or reviewer not found in firm");
+  if(user.role==="manager"){
+   for(const target of [assignee,reviewer]){
+    if(!target)continue;
+    const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+      .bind(user.firm_id,target,user.id,user.id).first();
+    if(!teammate)return fail("You may assign work only to your own team",403);
+   }
+  }
   const due=clean(data.due_date,10);
-  if (due && !/^\d{4}-\d\d-\d\d$/.test(due)) return fail("Due date must be YYYY-MM-DD");
+  if (due && !validCalendarDate(due)) return fail("Due date must be a valid YYYY-MM-DD calendar date");
   const taskId=id(), at=iso();
   const priority=["low","medium","high"].includes(data.priority)?data.priority:"medium";
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,assignee_id,reviewer_id,priority,status,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(taskId,user.firm_id,clientId,title,service,clean(data.period,60),due||null,assignee||null,reviewer||null,priority,"todo",clean(data.notes,2000),at,at),
+    env.DB.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,ask_by_date,assignee_id,reviewer_id,priority,status,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(taskId,user.firm_id,clientId,title,service,clean(data.period,60),due||null,due?shiftCalendarDays(due,-10):null,assignee||null,reviewer||null,priority,"todo",clean(data.notes,2000),at,at),
+    env.DB.prepare("INSERT INTO task_events(id,firm_id,task_id,actor_id,from_status,to_status,at) VALUES(?,?,?,?,?,?,?)")
+      .bind(id(),user.firm_id,taskId,user.id,null,"todo",at),
     await audit(env.DB,user,"created","task",taskId,{client_id:clientId})
   ]);
   return output({ id:taskId },201);
@@ -160,24 +236,32 @@ async function handleCreateTask(data, env, user) {
 async function handleUpdateTask(taskId, data, env, user) {
   const previous=await env.DB.prepare("SELECT * FROM tasks WHERE firm_id=? AND id=?").bind(user.firm_id,taskId).first();
   if (!previous) return fail("Task not found",404);
+  if(!(await canReadClient(env.DB,user,previous.client_id)))return fail("Insufficient permission",403);
   if (!isPrivileged(user) && (previous.assignee_id!==user.id || previous.status==="done")) return fail("Insufficient permission",403);
   const status=data.status===undefined?previous.status:safeStatus(data.status);
   if (!status || !statusForRole(user.role,status)) return fail("Status not permitted");
   const assignee=isPrivileged(user) && data.assignee_id!==undefined?clean(data.assignee_id,80):previous.assignee_id;
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee))) return fail("Assignee not found in firm");
+  if(user.role==="manager"&&assignee){
+   const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+    .bind(user.firm_id,assignee,user.id,user.id).first();
+   if(!teammate)return fail("You may assign work only to your own team",403);
+  }
   const notes=data.notes===undefined?previous.notes:clean(data.notes,2000);
   const at=iso();
   const completed=status==="done"?(previous.completed_at||at):null;
   await env.DB.batch([
-    env.DB.prepare("UPDATE tasks SET status=?,assignee_id=?,notes=?,updated_at=?,completed_at=? WHERE id=? AND firm_id=?")
-      .bind(status,assignee||null,notes,at,completed,taskId,user.firm_id),
+    env.DB.prepare("UPDATE tasks SET status=?,assignee_id=?,notes=?,updated_at=?,completed_at=?,completed_by=? WHERE id=? AND firm_id=?")
+      .bind(status,assignee||null,notes,at,completed,status==="done"?(previous.completed_by||user.id):null,taskId,user.firm_id),
+    env.DB.prepare("INSERT INTO task_events(id,firm_id,task_id,actor_id,from_status,to_status,note,at) VALUES(?,?,?,?,?,?,?,?)")
+      .bind(id(),user.firm_id,taskId,user.id,previous.status,status,assignee!==previous.assignee_id?"Assignee changed":null,at),
     await audit(env.DB,user,"updated","task",taskId,{from:previous.status,to:status,assignee_changed:assignee!==previous.assignee_id})
   ]);
   return output({ ok:true });
 }
 async function loadTaskForDocument(db,user,taskId) {
   const task=await db.prepare("SELECT id,client_id,assignee_id FROM tasks WHERE id=? AND firm_id=?").bind(taskId,user.firm_id).first();
-  return task && (isPrivileged(user)||task.assignee_id===user.id)?task:null;
+  return task && (await canReadClient(db,user,task.client_id)) && (isPrivileged(user)||task.assignee_id===user.id)?task:null;
 }
 async function handleCreateDocument(data,env,user) {
   const taskId=clean(data.task_id,100), name=clean(data.name,180);
@@ -211,13 +295,14 @@ async function handleUpdateDocument(docId,data,env,user) {
 async function handleCreateStaff(data,env,user) {
   if (user.role!=="principal") return fail("Only principals can add staff",403);
   const name=clean(data.name,100), email=clean(data.email,200).toLowerCase(), role=data.role==="manager"?"manager":"staff";
-  const password=String(data.password||"");
+  const password=String(data.password||""),managerId=clean(data.manager_id,100);
   if(!name||!validEmail(email)||password.length<12||password.length>128) return fail("Name, valid email and password (12–128 characters) required");
+  if(managerId&&!(await validClientManager(env.DB,user.firm_id,managerId)))return fail("Reporting manager must be a principal or manager in this firm");
   const pw=await passwordRecord(password), userId=id();
   try {
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO users(id,firm_id,name,email,role,salt,password_hash,active,created_at) VALUES (?,?,?,?,?,?,?,?,?)")
-        .bind(userId,user.firm_id,name,email,role,pw.salt,pw.password_hash,1,iso()),
+      env.DB.prepare("INSERT INTO users(id,firm_id,name,email,role,salt,password_hash,active,created_at,manager_id) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind(userId,user.firm_id,name,email,role,pw.salt,pw.password_hash,1,iso(),role==="manager"?null:managerId||null),
       await audit(env.DB,user,"created","user",userId,{role})
     ]);
   } catch(e) {if(String(e).includes("UNIQUE"))return fail("Email already used",409);throw e;}
@@ -243,14 +328,15 @@ function plannedDueDate(ym,frequency,day) {
   return date.toISOString().slice(0,10);
 }
 async function handleCreateTemplate(data,env,user){
-  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  if(user.role!=="principal")return fail("Only principal may change firm-wide compliance templates",403);
   const name=clean(data.name,120),service=clean(data.service,80),frequency=String(data.frequency||"");
   const day=Number(data.due_day);
-  if(!name||!service||!["monthly","quarterly","annual"].includes(frequency)||!Number.isInteger(day)||day<1||day>28)return fail("Valid name, service, frequency and planning day (1–28) required");
+  const lead=data.ask_by_lead_days===undefined?10:Number(data.ask_by_lead_days);
+  if(!name||!service||!["monthly","quarterly","annual"].includes(frequency)||!Number.isInteger(day)||day<1||day>28||!Number.isInteger(lead)||lead<0||lead>90)return fail("Valid name, service, planning day (1–28) and ask-by lead (0–90) required");
   const templateId=id();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO service_templates(id,firm_id,name,service,frequency,due_day,active,created_at) VALUES (?,?,?,?,?,?,1,?)")
-      .bind(templateId,user.firm_id,name,service,frequency,day,iso()),
+    env.DB.prepare("INSERT INTO service_templates(id,firm_id,name,service,frequency,due_day,ask_by_lead_days,active,created_at) VALUES (?,?,?,?,?,?,?,1,?)")
+      .bind(templateId,user.firm_id,name,service,frequency,day,lead,iso()),
     await audit(env.DB,user,"created","template",templateId,{frequency})
   ]);
   return output({id:templateId},201);
@@ -263,7 +349,12 @@ async function handleEnroll(data,env,user){
     env.DB.prepare("SELECT id FROM service_templates WHERE firm_id=? AND id=? AND active=1").bind(user.firm_id,templateId).first(),
     validateFirmUser(env.DB,user.firm_id,assigneeId)
   ]);
-  if(!clientRecord||!templateRecord||!validUser)return fail("Invalid client, template or assignee");
+  if(!clientRecord||!templateRecord||!validUser||!(await canReadClient(env.DB,user,clientId)))return fail("Invalid accessible client, template or assignee");
+  if(user.role==="manager"&&assigneeId){
+   const teammate=await env.DB.prepare("SELECT id FROM users WHERE firm_id=? AND id=? AND (id=? OR manager_id=?) AND active=1")
+    .bind(user.firm_id,assigneeId,user.id,user.id).first();
+   if(!teammate)return fail("Enrollment assignee must belong to your own team",403);
+  }
   await env.DB.batch([
     env.DB.prepare("INSERT INTO service_enrollments(id,firm_id,client_id,template_id,assignee_id,active,created_at) VALUES (?,?,?,?,?,1,?) ON CONFLICT(firm_id,client_id,template_id) DO UPDATE SET assignee_id=excluded.assignee_id,active=1")
       .bind(id(),user.firm_id,clientId,templateId,assigneeId||null,iso()),
@@ -274,23 +365,51 @@ async function handleEnroll(data,env,user){
 async function generatePeriod(db,ym,firmId=null,actorId=null) {
   if(!calendarPeriod(ym,"monthly"))throw Error("Invalid work period");
   const query=firmId
-    ?db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.firm_id=? AND e.active=1 AND t.active=1 LIMIT 2000").bind(firmId)
-    :db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.active=1 AND t.active=1 LIMIT 2000");
+    ?db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days,t.due_shift,t.verified_at,t.starter_code FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.firm_id=? AND e.active=1 AND t.active=1 AND (t.starter_code IS NULL OR t.verified_at IS NOT NULL) LIMIT 2000").bind(firmId)
+    :db.prepare("SELECT e.firm_id,e.client_id,e.assignee_id,t.id AS template_id,t.name,t.service,t.frequency,t.due_day,t.ask_by_lead_days,t.due_shift,t.verified_at,t.starter_code FROM service_enrollments e JOIN service_templates t ON t.id=e.template_id AND t.firm_id=e.firm_id WHERE e.active=1 AND t.active=1 AND (t.starter_code IS NULL OR t.verified_at IS NOT NULL) LIMIT 2000");
   const records=(await query.all()).results;
   let created=0,already=0;
+  const requirementCache=new Map(),calendarCache=new Map();
+  async function calendarFor(firm){
+    if(!calendarCache.has(firm)){
+      const [profile,holidays]=await Promise.all([
+       db.prepare("SELECT working_days FROM firm_profiles WHERE firm_id=?").bind(firm).first(),
+       db.prepare("SELECT date FROM compliance_holidays WHERE firm_id=?").bind(firm).all()
+      ]);
+      calendarCache.set(firm,{working:profile?JSON.parse(profile.working_days):[1,2,3,4,5,6],
+        holidays:holidays.results.map(h=>h.date)});
+    }
+    return calendarCache.get(firm);
+  }
   for(const row of records) {
     const period=calendarPeriod(ym,row.frequency);
     const exists=await db.prepare("SELECT id FROM recurrence_runs WHERE firm_id=? AND template_id=? AND client_id=? AND period=?").bind(row.firm_id,row.template_id,row.client_id,period).first();
     if(exists){already++;continue;}
-    const taskId=id(),at=iso(),due=plannedDueDate(ym,row.frequency,row.due_day);
+    const taskId=id(),at=iso();
+    const override=await db.prepare("SELECT new_due_date FROM due_date_overrides WHERE firm_id=? AND template_id=? AND period=?")
+      .bind(row.firm_id,row.template_id,period).first();
+    const calendar=await calendarFor(row.firm_id);
+    const due=override?.new_due_date||planningRule(plannedDueDate(ym,row.frequency,row.due_day),row,calendar.working,calendar.holidays);
+    const askBy=shiftCalendarDays(due,-Number(row.ask_by_lead_days));
+    const cacheKey=row.firm_id+":"+row.template_id;
+    if(!requirementCache.has(cacheKey)) {
+      const result=await db.prepare("SELECT id,name FROM requirement_templates WHERE firm_id=? AND template_id=? AND required=1 ORDER BY sort_order,id")
+        .bind(row.firm_id,row.template_id).all();
+      requirementCache.set(cacheKey,result.results);
+    }
+    const checklist=requirementCache.get(cacheKey);
     try {
       await db.batch([
-        db.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,assignee_id,priority,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
-          .bind(taskId,row.firm_id,row.client_id,row.name,row.service,period,due,row.assignee_id||null,"medium","todo","Planning date only; verify statutory filing dates separately.",at,at),
+        db.prepare("INSERT INTO tasks(id,firm_id,client_id,title,service,period,due_date,ask_by_date,assignee_id,priority,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(taskId,row.firm_id,row.client_id,row.name,row.service,period,due,askBy,row.assignee_id||null,"medium","todo","Planning date only; verify statutory filing dates separately.",at,at),
         db.prepare("INSERT INTO recurrence_runs(id,firm_id,template_id,client_id,period,task_id,created_at) VALUES (?,?,?,?,?,?,?)")
           .bind(id(),row.firm_id,row.template_id,row.client_id,period,taskId,at),
+        db.prepare("INSERT INTO task_events(id,firm_id,task_id,actor_id,from_status,to_status,at) VALUES(?,?,?,?,?,?,?)")
+          .bind(id(),row.firm_id,taskId,actorId||null,null,"todo",at),
+        ...checklist.map(req=>db.prepare("INSERT INTO documents(id,firm_id,task_id,client_id,name,status,requirement_template_id,created_at,updated_at) VALUES(?,?,?,?,?,'missing',?,?,?)")
+          .bind(id(),row.firm_id,taskId,row.client_id,req.name,req.id,at,at)),
         db.prepare("INSERT INTO activity(id,firm_id,actor_id,event,entity_type,entity_id,details,at) VALUES (?,?,?,?,?,?,?,?)")
-          .bind(id(),row.firm_id,actorId||null,actorId?"generated":"system_generated","task",taskId,JSON.stringify({period,template_id:row.template_id}),at)
+          .bind(id(),row.firm_id,actorId||null,actorId?"generated":"system_generated","task",taskId,JSON.stringify({period,template_id:row.template_id,items:checklist.length}),at)
       ]);
       created++;
     }catch(error){
@@ -301,7 +420,7 @@ async function generatePeriod(db,ym,firmId=null,actorId=null) {
   return {created,already,checked:records.length};
 }
 async function handleGenerate(data,env,user){
-  if(!isPrivileged(user))return fail("Insufficient permission",403);
+  if(user.role!=="principal")return fail("Only the principal can generate work for the entire firm",403);
   const period=clean(data.period,7);
   if(!calendarPeriod(period,"monthly"))return fail("Period must be YYYY-MM");
   const result=await generatePeriod(env.DB,period,user.firm_id,user.id);
@@ -309,7 +428,7 @@ async function handleGenerate(data,env,user){
 }
 
 async function handleExport(request,env,user) {
-  if (!isPrivileged(user)) return fail("Insufficient permission",403);
+  if (user.role!=="principal") return fail("Only principals may export firm-wide data",403);
   const kind=new URL(request.url).searchParams.get("kind");
   const columns={
     clients:["id","name","category","email","phone","created_at"],
@@ -318,6 +437,7 @@ async function handleExport(request,env,user) {
   };
   if(!columns[kind])return fail("Unknown export type");
   const rows=await env.DB.prepare("SELECT "+columns[kind].join(",")+" FROM "+kind+" WHERE firm_id=? ORDER BY created_at DESC LIMIT 10000".replace(kind==="documents"?"created_at DESC":"no-sentinel",kind==="documents"?"updated_at DESC":"no-sentinel")).bind(user.firm_id).all();
+  await (await audit(env.DB,user,"exported","data",kind,{rows:rows.results.length})).run();
   const csv=[columns[kind].join(","),...rows.results.map(row=>columns[kind].map(key=>csvCell(row[key])).join(","))].join("\r\n");
   return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":"attachment; filename=chamber-"+kind+".csv","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
 }
@@ -334,15 +454,48 @@ async function api(request,env) {
     }
     if(path==="/api/setup"&&method==="POST") return handleSetup(request,env);
     if(path==="/api/login"&&method==="POST") return handleLogin(request,env);
+    if(path==="/api/mfa/setup"||path==="/api/mfa/verify")
+      return handleMfa(request,env,{output,fail,bodyJSON,hashToken,issueSession,iso,audit});
     const user=await sessionFor(request,env.DB);
     if(!user) return fail("Sign in required",401);
     if(path==="/api/logout"&&method==="POST"){
       const token=(request.headers.get("Cookie")||"").split(";").map(s=>s.trim()).find(s=>s.startsWith("chamber_session="));
-      if(token) await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await hashToken(token.split("=")[1])).run();
+      if(token) await env.DB.batch([
+        env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await hashToken(token.split("=")[1])),
+        await audit(env.DB,user,"signed_out","session",user.id)
+      ]);
       return output({ok:true},200,{"Set-Cookie":"chamber_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"});
     }
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
+    if(path.startsWith("/api/security/"))return handleSecurity(request,env,user,{output,fail,clean});
+    if(path==="/api/onboarding"||path==="/api/onboarding/profile")return handleOnboarding(request,env,user,{output,fail,clean,audit,iso,bodyJSON,validEmail});
+    if(path.startsWith("/api/compliance/"))return handleCompliance(request,env,user,{output,fail,clean,bodyJSON,audit,id,iso});
+    if(path==="/api/portal/links"||/^\/api\/portal\/links\/[a-f0-9-]+\/revoke$/.test(path))
+      return handlePortalLinks(request,env,user,{output,fail,clean,audit,bodyJSON});
+    if(path==="/api/notifications"||/^\/api\/notifications\/[a-f0-9-]+\/read$/.test(path))
+      return handlePortalNotifications(request,env,user,{output,fail,audit});
+    if(path==="/api/devices"&&method==="GET"){
+      const principal=user.role==="principal";
+      const devices=(await env.DB.prepare("SELECT d.id,d.label,d.user_agent,d.first_seen_at,d.last_seen_at,d.trusted,d.revoked_at,d.user_id,u.name AS user_name FROM devices d JOIN users u ON u.id=d.user_id AND u.firm_id=d.firm_id WHERE d.firm_id=? "+(principal?"":"AND d.user_id=? ")+"ORDER BY d.last_seen_at DESC LIMIT 300")
+       .bind(...(principal?[user.firm_id]:[user.firm_id,user.id])).all()).results;
+      return output({devices,current_device_id:user.device_id??null});
+    }
+    const revoke=path.match(/^\/api\/devices\/([a-f0-9-]+)\/revoke$/);
+    if(revoke&&method==="POST"){
+      const d=await env.DB.prepare("SELECT id,user_id,revoked_at FROM devices WHERE id=? AND firm_id=?").bind(revoke[1],user.firm_id).first();
+      if(!d)return fail("Device not found",404);
+      if(user.role!=="principal"&&d.user_id!==user.id)return fail("Insufficient permission",403);
+      if(d.revoked_at)return fail("Device already revoked",409);
+      await env.DB.batch([
+       env.DB.prepare("UPDATE devices SET revoked_at=? WHERE id=? AND firm_id=?").bind(iso(),d.id,user.firm_id),
+       env.DB.prepare("DELETE FROM sessions WHERE device_id=?").bind(d.id),
+       await audit(env.DB,user,"revoked","device",d.id,{user_id:d.user_id})
+      ]);
+      return output({ok:true});
+    }
     if(path==="/api/clients"&&method==="POST") return handleCreateClient(await bodyJSON(request),env,user);
+    if(/^\/api\/clients\/[a-f0-9-]+(?:\/(?:profile|contacts|gstins|archive))?$/.test(path))
+      return handleClientMaster(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
     if(path==="/api/tasks"&&method==="POST") return handleCreateTask(await bodyJSON(request),env,user);
     if(path==="/api/documents"&&method==="POST") return handleCreateDocument(await bodyJSON(request),env,user);
     if(path==="/api/staff"&&method==="POST") return handleCreateStaff(await bodyJSON(request),env,user);
@@ -350,6 +503,21 @@ async function api(request,env) {
     if(path==="/api/enrollments"&&method==="POST") return handleEnroll(await bodyJSON(request),env,user);
     if(path==="/api/recurrence"&&method==="POST") return handleGenerate(await bodyJSON(request),env,user);
     if(path==="/api/export"&&method==="GET") return handleExport(request,env,user);
+    if(path==="/api/files"||path.startsWith("/api/files/"))return handleFiles(request,env,user,{output,fail,clean,audit,id,iso});
+    if(path.startsWith("/api/sheets/"))return handleSheetSettings(request,env,user,{output,fail,clean,audit,id,iso,bodyJSON});
+    if(path.startsWith("/api/reports/"))return handleReports(request,env,user,{output,fail,isPrivileged});
+    if(path.startsWith("/api/delivery/"))return handleDelivery(request,env,user,{output,fail,clean,audit,iso,bodyJSON});
+    if(path.startsWith("/api/messages/"))
+      return handleMessages(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail});
+    if(path==="/api/reminders"||path.startsWith("/api/reminders/"))
+      return handleReminderApi(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON});
+    if(path==="/api/imports"||path.startsWith("/api/imports/"))
+      return handleImports(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validEmail,csvCell});
+    if(path==="/api/workload" || /^\/api\/tasks\/[a-f0-9-]+\/(?:assignment|review|comments|timer|time)$/.test(path))
+      return handleWork(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validateFirmUser});
+    if(["/api/requirements","/api/overrides","/api/tracker","/api/tracker/detail","/api/inward"].includes(path) ||
+       /^\/api\/tasks\/[a-f0-9-]+\/history$/.test(path))
+      return handleWorkflow(request,env,user,{output,fail,clean,audit,id,iso,isPrivileged,bodyJSON});
     const taskMatch=path.match(/^\/api\/tasks\/([a-f0-9-]+)$/);
     if(taskMatch&&method==="PATCH") return handleUpdateTask(taskMatch[1],await bodyJSON(request),env,user);
     const docMatch=path.match(/^\/api\/documents\/([a-f0-9-]+)$/);
@@ -364,11 +532,40 @@ async function api(request,env) {
 export default {
   async scheduled(controller,env,ctx) {
     if(!env.DB)return;
-    ctx.waitUntil(generatePeriod(env.DB,new Date().toISOString().slice(0,7)).catch(error=>console.error("Chamber recurrence failure",error.message)));
+    if(controller.cron==="*/1 * * * *"){
+      ctx.waitUntil(Promise.all([
+       scheduledSheetSync(env).catch(error=>console.error("Chamber Sheets sync failed",error?.message)),
+       drainDeliveryQueue(env).catch(error=>console.error("Chamber delivery queue failed",error?.message))
+      ]));
+      return;
+    }
+    const now=new Date();
+    // Look ahead more than 60 days, including monthly assignments due in the next month.
+    const months=[0,1,2,3].map(i=>new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+i,1)).toISOString().slice(0,7));
+    ctx.waitUntil((async()=>{
+      for(const month of months)await generatePeriod(env.DB,month);
+      await refreshReminderSuggestions(env.DB);
+    })().catch(error=>console.error("Chamber daily workflow failed",error.message)));
   },
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
-    if(path.startsWith("/api/")) return api(request,env);
+    if(path==="/api/file-scan/callback")return scanCallback(request,env);
+    if(path==="/api/webhooks/whatsapp")return handleWhatsAppWebhook(request,env);
+    if(["/api/portal/start","/api/portal/verify","/api/portal/checklist","/api/portal/upload"].includes(path))
+      return handlePublicPortal(request,env);
+    if(path.startsWith("/api/")){
+      const response=await api(request,env);
+      if(response.status===403&&env.DB){
+        try{
+          const actor=await sessionFor(request,env.DB);
+          if(actor){
+            const target=path.replace(/[0-9a-f]{8}-[0-9a-f-]{27,36}/gi,":id").slice(0,180);
+            await (await audit(env.DB,actor,"access_denied","api",target,{method:request.method})).run();
+          }
+        }catch(error){console.error("Chamber denied-access audit failure",error?.message)}
+      }
+      return response;
+    }
     if(!env.ASSETS) return fail("Static assets missing",503);
     const response=await env.ASSETS.fetch(request);
     const headers=new Headers(response.headers);

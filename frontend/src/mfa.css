@@ -1,0 +1,20 @@
+/* Two-factor authentication. Uses the same Chamber form-shell styling. */
+.chamber-mfa{max-width:520px}
+.chamber-mfa-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}
+.chamber-mfa-icon{display:flex;align-items:center;justify-content:center;color:#1f6f5c;background:#e4f1eb;border:1px solid #c8dcd3;width:45px;height:45px;border-radius:8px}
+.chamber-mfa-head button{border:0;background:transparent;color:#708393;padding:6px;cursor:pointer}
+.chamber-mfa-head button:focus-visible,.chamber-mfa button:focus-visible,.chamber-mfa input:focus-visible{outline:2px solid #1c739b;outline-offset:2px}
+.chamber-mfa-setup{padding:14px;background:#f6f9fb;border:1px solid #dbe5ed;border-radius:5px;margin:18px 0}
+.chamber-mfa-setup h2{font-size:13px;color:#163c55;margin:0 0 7px}
+.chamber-mfa-setup>p{font-size:12px;color:#556c7d;line-height:1.6;margin:7px 0}
+.chamber-mfa-secret{padding:10px;background:white;border:1px solid #d5e1e9;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0}
+.chamber-mfa-secret code{font-size:12px;letter-spacing:.04em;overflow-wrap:anywhere;color:#19374c;font-weight:600}
+.chamber-mfa-secret button{display:flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid #c9d5de;border-radius:4px;background:#f9fbfd;color:#205e79;cursor:pointer;font-size:11px;white-space:nowrap}
+.chamber-mfa-code{display:grid;gap:7px;margin:15px 0 18px}
+.chamber-mfa-code label{font-size:13px;font-weight:700;color:#28455b}
+.chamber-mfa-code input{font-family:monospace;letter-spacing:.35em;text-align:center;font-size:23px;min-height:50px;border-radius:5px;border:1px solid #c9d9e4;background:#fff;color:#112e43;width:100%;max-width:260px}
+.chamber-mfa-code .hint{font-size:11px;line-height:1.5}
+.chamber-mfa .form-actions{display:flex;justify-content:flex-end;gap:9px;align-items:center}
+.chamber-mfa .form-actions .tracker-btn.primary{width:auto;margin:0}
+.chamber-mfa-policy{font-size:10px;color:#708495;border-top:1px solid #e3e9ee;margin:18px 0 0;padding-top:13px;line-height:1.5}
+@media(max-width:480px){.chamber-mfa .form-actions{flex-wrap:wrap}.chamber-mfa .form-actions button{width:100%}}

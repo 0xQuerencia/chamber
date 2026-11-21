@@ -1,0 +1,18 @@
+/* Deliberate provider sends, not speculative sent indicators. */
+.composer-delivery{background:#F7F8F4;border:1px solid var(--ch-border,#DDD8CB);border-radius:6px;padding:13px;margin:12px 0;color:#12202F}
+.composer-delivery>header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.composer-delivery h3{display:flex;align-items:center;gap:7px;font-size:13px;margin:0}
+.composer-delivery h4{font-size:12px;margin:10px 0 7px}
+.composer-delivery input,.composer-delivery select{font:12px inherit;background:#fff;border:1px solid #B7B9B1;color:#152B3B;min-height:32px;border-radius:4px;padding:6px 8px;max-width:100%}
+.composer-provider-config{border-top:1px solid #DDD8CB;padding-top:11px;margin:11px 0;display:grid;gap:8px}
+.composer-provider-config .tracker-btn{width:max-content}
+.composer-send-box{border-top:1px solid #DDD8CB;display:grid;gap:8px;margin:10px 0;padding-top:11px}
+.composer-send-box label{font-size:11px;color:#4B5B6B;display:grid;gap:4px}
+.composer-send-box .tracker-btn.primary{width:max-content;margin:0}
+.composer-receipts{border-top:1px solid #DDD8CB;margin-top:12px;padding-top:10px}
+.composer-receipt-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #E7E6E1;font-size:11px}
+.composer-receipt-row strong,.composer-receipt-row small{display:block}
+.composer-receipt-row small{font-size:10px;color:#566979;margin-top:3px;overflow-wrap:anywhere}
+.composer-receipt-row>span{display:flex;align-items:center;gap:5px;text-transform:capitalize;color:#1F6F5C}
+.composer-error{color:#85190E!important}
+@media(max-width:700px){.composer-receipt-row{grid-template-columns:minmax(0,1fr) auto}.composer-receipt-row>button{grid-column:1/-1;width:max-content}}

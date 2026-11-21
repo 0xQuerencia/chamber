@@ -1,0 +1,44 @@
+/* Firm setup wizard: reusable ERP paper layout, no decorative gradients. */
+.onboarding{min-width:0;color:#173247}
+.onboarding-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:15px}
+.onboarding-heading h1{font-size:23px;margin:0}.onboarding-heading p{font-size:12px;color:#6b8192;margin:5px 0 0}
+.onboarding-progress{background:#fff;border:1px solid #d5e0e9;padding:11px 13px;margin-bottom:13px}
+.onboarding-progress>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#647c8f}
+.onboarding-progress>div:first-child strong{color:#235c46}
+.onboarding-progress [role=progressbar]{height:7px;background:#e3eaf0;border-radius:4px;overflow:hidden;margin-top:9px}
+.onboarding-progress [role=progressbar] span{background:#24785c;display:block;height:100%}
+.onboarding-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:12px;align-items:start}
+.onboarding-step-list{border:1px solid #d6e1e9;background:#f7f9fb}
+.onboarding-step-list button{width:100%;border:0;border-bottom:1px solid #e1e9f0;background:transparent;display:flex;align-items:flex-start;gap:10px;padding:14px 11px;text-align:left;cursor:pointer}
+.onboarding-step-list button:last-child{border-bottom:0}
+.onboarding-step-list button.current{background:#eaf2f8;box-shadow:inset 3px 0 #2a759e}
+.onboarding-step-list button:focus-visible,.onboarding button:focus-visible,.onboarding input:focus-visible,.onboarding select:focus-visible{outline:2px solid #2c78ae;outline-offset:1px}
+.onboarding-step-list strong{display:block;font-size:12px;color:#233d53}
+.onboarding-step-list small{font-size:10px;color:#758b9a;display:block;margin-top:4px;line-height:1.4}
+.onboarding-step-status{color:#2b7660;flex:0 0 auto}
+.onboarding-content{background:#fff;border:1px solid #d6e1e9;padding:18px;min-width:0}
+.onboarding-content h2{font-size:17px;margin:0 0 9px}.onboarding-content h3{font-size:13px;margin:0 0 10px}
+.onboarding-hint{font-size:12px;line-height:1.5;color:#657e91;margin:8px 0 14px}
+.onboarding-fields{display:grid;gap:11px;max-width:560px}
+.onboarding-input{display:grid;gap:5px;font-size:11px;color:#526b7e;font-weight:600}
+.onboarding-input input,.onboarding-input select{border:1px solid #c6d4de;border-radius:3px;background:#fff;color:#1e3c50;padding:7px 8px;min-height:35px;font:12px inherit}
+.onboarding-fields .tracker-btn.primary,.onboarding-generate .tracker-btn.primary{max-width:max-content;margin:5px 0 0;min-width:136px}
+.onboarding-working-days{display:flex;gap:8px;flex-wrap:wrap;border:1px solid #e1e8ee;padding:10px 12px}
+.onboarding-working-days legend{font-size:11px;color:#637e8d;font-weight:600}
+.onboarding-working-days label{display:flex;align-items:center;gap:4px;font-size:11px}
+.onboarding-working-days input{accent-color:#1f6f5c}
+.onboarding-count{display:flex;align-items:center;gap:7px;font-size:13px;color:#215a76;background:#f1f6fa;padding:12px;border:1px solid #d7e4ed;margin:12px 0}
+.onboarding-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.onboarding-actions .tracker-btn.primary{width:auto;margin:0}
+.onboarding-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.onboarding-form-grid>form{border:1px solid #e1e8ee;background:#f9fbfc;padding:13px}
+.onboarding-form-grid form .tracker-btn{max-width:100%;margin-top:8px}
+.onboarding-counts{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+.onboarding-counts span{padding:7px 10px;border:1px solid #d5e3ec;background:#eef5fa;color:#37617a;font-size:11px}
+.onboarding-generate{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:14px 0}
+.onboarding-integrations{margin-top:24px;border-top:1px solid #dfe7ed;padding-top:15px}
+.onboarding-integrations h3{display:flex;align-items:center;gap:7px}
+.onboarding-integrations>div{display:grid;grid-template-columns:17px minmax(0,1fr) auto;align-items:center;gap:8px;border-bottom:1px solid #edf1f4;padding:9px 0;font-size:12px}
+.onboarding-integrations>div svg{color:#39718e}.onboarding-integrations>div strong{font-size:11px;color:#4c677a}
+.onboarding-integrations>p{font-size:11px;color:#708497;line-height:1.5;margin:12px 0}
+@media(max-width:900px){.onboarding-layout{grid-template-columns:minmax(0,1fr)}.onboarding-step-list{display:flex;overflow-x:auto}.onboarding-step-list button{min-width:185px;border-bottom:0;border-right:1px solid #e0e8ee}}
+@media(max-width:560px){.onboarding-heading{flex-direction:column}.onboarding-content{padding:12px}.onboarding-step-list button{min-width:165px}}
