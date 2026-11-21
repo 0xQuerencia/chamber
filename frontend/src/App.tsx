@@ -3,6 +3,7 @@ import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarD
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
 import {TallyGateway,TallyDataGrid,TallyTaskRegister} from "./TallyWorkspace";
+import {TallyRequestVoucher,TallyReceivedVoucher} from "./TallyForms";
 import DataTracker from "./Tracker";
 import ClientProfile from "./ClientProfile";
 import WorkBoard from "./WorkBoard";
@@ -95,6 +96,8 @@ export default function App(){
  const [datePickerOpen,setDatePickerOpen]=useState(false);
  const [firmPickerOpen,setFirmPickerOpen]=useState(false);
  const [expandedTracker,setExpandedTracker]=useState(false);
+ const [expandedRequest,setExpandedRequest]=useState(false);
+ const [expandedDocuments,setExpandedDocuments]=useState(false);
  const [view,setView]=useState<View>("desk");
  const [workFilter,setWorkFilter]=useState<WorkFilter>("all");
  const [query,setQuery]=useState("");
@@ -129,7 +132,7 @@ export default function App(){
   void getSession().then(async s=>{if(!alive)return;setSession(s);if(s.authenticated){const d=await getWorkspace();if(alive){setWorkspace(d);setLoadedAt(new Date().toLocaleString("en-IN"))}}}).catch(e=>{if(alive){setError(String(e));setSession({authenticated:false,needs_setup:false,user:null})}});
   return()=>{alive=false};
  },[enterPreview]);
- const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false);setExpandedTracker(false)},[]);
+ const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false);setExpandedTracker(false);setExpandedRequest(false);setExpandedDocuments(false)},[]);
  useEffect(()=>{
   const handler=(e:KeyboardEvent)=>{
    if(!workspace)return;
@@ -367,7 +370,7 @@ export default function App(){
    </>;
   }
  let page:ReactNode=null;
- if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<TallyTaskRegister workspace={workspace} onNavigate={navigate} preview={preview} onOpen={t=>{navigate("work");setSelected(t.id)}}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=expandedTracker?<DataTracker workspace={workspace} preview={preview}/>:<TallyDataGrid workspace={workspace} preview={preview} onNavigate={navigate} onOpenRecord={()=>setExpandedTracker(true)}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
+ if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<TallyTaskRegister workspace={workspace} onNavigate={navigate} preview={preview} onOpen={t=>{navigate("work");setSelected(t.id)}}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=expandedRequest?<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>:<TallyRequestVoucher workspace={workspace} preview={preview} onAdvanced={()=>setExpandedRequest(true)}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=expandedDocuments?showDocuments():<TallyReceivedVoucher workspace={workspace} preview={preview} onAdvanced={()=>setExpandedDocuments(true)}/>;break;case "tracker":page=expandedTracker?<DataTracker workspace={workspace} preview={preview}/>:<TallyDataGrid workspace={workspace} preview={preview} onNavigate={navigate} onOpenRecord={()=>setExpandedTracker(true)}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  const portalToken=typeof window==="undefined"?null:window.location.hash.match(/^#\/portal\/([0-9a-f]{64})$/)?.[1];
  if(portalToken)return <ClientPortal token={portalToken}/>;
