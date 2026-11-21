@@ -12,6 +12,7 @@ import "./insights.css";
 import "./devices.css";
 import "./sheets-settings.css";
 import "./evidence.css";
+import "./reminders.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Chamber root element missing");
