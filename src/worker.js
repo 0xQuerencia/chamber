@@ -12,6 +12,7 @@ import { handleReminderApi, refreshReminderSuggestions } from "./reminders.js";
 import {beginMfaChallenge,handleMfa} from "./mfa.js";
 import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./client-validation.js";
 import {clientScope,canReadClient,validClientManager} from "./permissions.js";
+import {handleSecurity} from "./security.js";
 
 const enc = new TextEncoder();
 const SESSION_DAYS = 7;
@@ -77,9 +78,11 @@ async function sessionFor(request, db) {
   }
   return row;
 }
-async function audit(db, user, event, entityType, entityId, details = {}) {
-  return db.prepare("INSERT INTO activity (id,firm_id,actor_id,event,entity_type,entity_id,details,at) VALUES (?,?,?,?,?,?,?,?)")
-    .bind(id(), user.firm_id, user.id, event, entityType, entityId, JSON.stringify(details), iso());
+const SECURITY_ACTIONS=new Set(["signed_in","signed_out","exported","revoked","configured","disconnected","mfa_enrolled","mfa_verified","access_denied","sign_in_failed","viewed_sensitive","downloaded"]);
+async function audit(db,user,event,entityType,entityId,details={}){
+  const eventClass=SECURITY_ACTIONS.has(event)?"security":"work";
+  return db.prepare("INSERT INTO activity (id,firm_id,actor_id,event,entity_type,entity_id,details,at,event_class) VALUES (?,?,?,?,?,?,?,?,?)")
+    .bind(id(),user.firm_id,user.id,event,entityType,entityId,JSON.stringify(details),iso(),eventClass);
 }
 async function handleSetup(request, env) {
   const existing = await env.DB.prepare("SELECT COUNT(*) as n FROM users").first();
@@ -112,8 +115,9 @@ async function handleLogin(request, env) {
     const count = (guard?.failures || 0) + 1;
     const lockUntil = count >= 5 ? new Date(Date.now() + 15 * 60000).toISOString() : null;
     await env.DB.prepare("INSERT INTO login_attempts(email,failures,lock_until) VALUES (?,?,?) ON CONFLICT(email) DO UPDATE SET failures=excluded.failures,lock_until=excluded.lock_until")
-      .bind(email, count, lockUntil).run();
-    return fail("Invalid email or password", 401);
+      .bind(email,count,lockUntil).run();
+    if(user)await (await audit(env.DB,user,"sign_in_failed","user",user.id,{locked:count>=5})).run();
+    return fail("Invalid email or password",401);
   }
   await env.DB.prepare("DELETE FROM login_attempts WHERE email=?").bind(email).run();
   if(isPrivileged(user)){
@@ -162,6 +166,9 @@ async function bootstrap(db,user){
     .bind(user.firm_id,...scope.args,...(staffOnly?[user.id]:[])).all(),
    db.prepare("SELECT id,template_id,name,required,sort_order FROM requirement_templates WHERE firm_id=? ORDER BY sort_order,name").bind(user.firm_id).all()
   ]);
+  if(isPrivileged(user)&&clients.results.length){
+    await (await audit(db,user,"viewed_sensitive","client_register",user.firm_id,{records:clients.results.length})).run();
+  }
   return output({firm,user:{id:user.id,name:user.name,email:user.email,role:user.role},
    staff:staff.results,clients:clients.results,tasks:tasks.results,documents:documents.results,
    activity:activity.results,templates:templates.results,enrollments:enrollments.results,
@@ -442,6 +449,7 @@ async function api(request,env) {
       return output({ok:true},200,{"Set-Cookie":"chamber_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"});
     }
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
+    if(path.startsWith("/api/security/"))return handleSecurity(request,env,user,{output,fail,clean});
     if(path==="/api/devices"&&method==="GET"){
       const principal=user.role==="principal";
       const devices=(await env.DB.prepare("SELECT d.id,d.label,d.user_agent,d.first_seen_at,d.last_seen_at,d.trusted,d.revoked_at,d.user_id,u.name AS user_name FROM devices d JOIN users u ON u.id=d.user_id AND u.firm_id=d.firm_id WHERE d.firm_id=? "+(principal?"":"AND d.user_id=? ")+"ORDER BY d.last_seen_at DESC LIMIT 300")
@@ -513,7 +521,19 @@ export default {
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
     if(path==="/api/file-scan/callback")return scanCallback(request,env);
-    if(path.startsWith("/api/")) return api(request,env);
+    if(path.startsWith("/api/")){
+      const response=await api(request,env);
+      if(response.status===403&&env.DB){
+        try{
+          const actor=await sessionFor(request,env.DB);
+          if(actor){
+            const target=path.replace(/[0-9a-f]{8}-[0-9a-f-]{27,36}/gi,":id").slice(0,180);
+            await (await audit(env.DB,actor,"access_denied","api",target,{method:request.method})).run();
+          }
+        }catch(error){console.error("Chamber denied-access audit failure",error?.message)}
+      }
+      return response;
+    }
     if(!env.ASSETS) return fail("Static assets missing",503);
     const response=await env.ASSETS.fetch(request);
     const headers=new Headers(response.headers);
