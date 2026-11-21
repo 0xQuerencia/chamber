@@ -1,7 +1,7 @@
-import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument} from "./types";
+import type {Workspace,Session,GenerationResult,TrackerSummary,TrackerDetail,ClientProfileData,WorkloadResponse,TaskComment,TaskHistoryEvent,TimerEntry,ImportClientRow,ImportPreview,ImportCommitResult,MessagePreview,MessageBatch,MessageBatchDetail,MessageChannel,MessageTemplate,DashboardReport,DrillReport,ReportKind,DeviceList,SheetsStatus,StoredDocument,ReminderPolicy,ReminderFeed,ReminderStatus} from "./types";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError"} }
 type Payload=Record<string,unknown>;
-export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
+export async function api<T>(path:string,method:"GET"|"POST"|"PATCH"|"PUT"="GET",data?:Payload,extra:Record<string,string>={}):Promise<T>{
  const headers=new Headers(extra);if(data!==undefined)headers.set("Content-Type","application/json");
  const response=await fetch(path,{method,headers,credentials:"same-origin",body:data===undefined?undefined:JSON.stringify(data)});
  const result:unknown=await response.json().catch(()=>({}));
@@ -76,3 +76,12 @@ export async function uploadEvidence(requirementId:string,file:File):Promise<{id
  if(!response.ok)throw new ApiError(typeof result.error==="string"?result.error:"Upload failed",response.status);
  return result;
 }
+
+export const getReminderConfig=()=>api<{config:ReminderPolicy;delivery_enabled:boolean}>("/api/reminders/config");
+export const saveReminderConfig=(config:ReminderPolicy)=>api<{config:ReminderPolicy;delivery_enabled:boolean}>("/api/reminders/config","PUT",config);
+export const refreshReminders=()=>api<{result:{created:number;already:number;resolved:number;blocked:number;checked:number};delivery_enabled:boolean}>("/api/reminders/refresh","POST",{});
+export const getReminders=(status:ReminderStatus,page=0)=>api<ReminderFeed>("/api/reminders?status="+status+"&page="+page);
+export const pauseClientReminders=(id:string,until:string,reason:string)=>api<{ok:boolean}>("/api/reminders/clients/"+encodeURIComponent(id)+"/pause","POST",{paused_until:until,reason});
+export const resumeClientReminders=(id:string)=>api<{ok:boolean}>("/api/reminders/clients/"+encodeURIComponent(id)+"/resume","POST",{});
+export const markReminderPrepared=(id:string,batchId:string)=>api<{ok:boolean}>("/api/reminders/"+encodeURIComponent(id)+"/prepared","POST",{batch_id:batchId});
+export const dismissReminder=(id:string,reason:string)=>api<{ok:boolean}>("/api/reminders/"+encodeURIComponent(id)+"/dismiss","POST",{reason});
