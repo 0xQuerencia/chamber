@@ -22,6 +22,9 @@ export async function handleClientMaster(request,env,user,deps){
     .bind(user.firm_id,cid).all()).results;
   const gstins=privileged?(await db.prepare("SELECT id,gstin,state_code FROM client_gstins WHERE firm_id=? AND client_id=? ORDER BY gstin")
     .bind(user.firm_id,cid).all()).results:[];
+  if(privileged&&(client.pan||client.gstin||client.notes)){
+   await (await audit(db,user,"viewed_sensitive","client",cid,{fields:["pan","gstin","notes"].filter(key=>Boolean(client[key]))})).run();
+  }
   return output({client:basic,contacts:privileged?contacts:contacts.map(c=>({
    id:c.id,name:c.name,title:c.title,email:c.email,phone:c.phone,preferred_channel:c.preferred_channel
   })),gstins});
