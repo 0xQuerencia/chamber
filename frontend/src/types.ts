@@ -57,3 +57,5 @@ export interface DrillReport {kind:ReportKind;total:number;page:number;rows:Dril
 
 export interface NamedDevice {id:string;label:string;user_agent:string;first_seen_at:string;last_seen_at:string;trusted:number;revoked_at:string|null;user_id:string;user_name:string}
 export interface DeviceList {devices:NamedDevice[];current_device_id:string|null}
+
+export interface SheetsStatus {connected:boolean;spreadsheet_id:string|null;last_synced_at:string|null;last_error:string|null;credentials_configured:boolean}
