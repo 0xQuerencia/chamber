@@ -120,6 +120,7 @@ async function handleLogin(request, env) {
     return beginMfaChallenge(env,user,{output,hashToken,iso});
   }
   return issueSession(request,env,user,data.device_label);
+}
 
 async function issueSession(request,env,user,deviceLabel){
   const token=[...crypto.getRandomValues(new Uint8Array(32))].map(v=>v.toString(16).padStart(2,"0")).join("");
