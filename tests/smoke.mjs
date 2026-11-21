@@ -375,6 +375,22 @@ const denyProviderUpdate=await call("/api/messages/templates/"+requestTemplate.i
  provider_template_id:"bad_override",confirm_approved:true
 },staffCookie);
 assert.equal(denyProviderUpdate.res.status,403);
+// Anonymous portal must not reveal another client's checklist without OTP.
+const forgedToken="a".repeat(64),forgedAccess="b".repeat(64);
+const invalidLinkStart=await call("/api/portal/start","POST",{token:forgedToken},"");
+assert.equal(invalidLinkStart.res.status,202);
+const checklistWithoutOtp=await call("/api/portal/checklist","POST",{}, "",{
+ "X-Portal-Link":forgedToken,"X-Portal-Access":forgedAccess
+});
+assert.equal(checklistWithoutOtp.res.status,401);
+const verifyUnknownOtp=await call("/api/portal/verify","POST",{token:forgedToken,code:"123456"},"");
+assert.equal(verifyUnknownOtp.res.status,401);
+const portalNotConfigured=await call("/api/portal/links","POST",{
+ client_id:clientA.id,period:"2026-12",expires_days:7
+});
+assert.equal(portalNotConfigured.res.status,503);
+const portalStaffDenied=await call("/api/portal/links","POST",{client_id:clientA.id,period:"2026-12"},staffCookie);
+assert.equal(portalStaffDenied.res.status,403);
 const health = await fetch(base + "/api/health");
 assert.equal(health.status,200);
 const page = await fetch(base + "/");
