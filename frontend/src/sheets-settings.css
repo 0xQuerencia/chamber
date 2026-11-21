@@ -1,0 +1,18 @@
+/* Google Sheets audit mirror settings. */
+.sheets-panel{background:#fff;border:1px solid #d9e3ed;color:#223e56;margin-top:16px}
+.sheets-panel>header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px;border-bottom:1px solid #e0e9f0}
+.sheets-panel h2{font-size:14px;display:flex;align-items:center;gap:8px;margin:0}
+.sheets-panel header p{font-size:11px;color:#667e90;margin:6px 0 0;line-height:1.5}
+.sheets-panel header button{border:1px solid #cbd8e3;background:#fff;color:#326080;cursor:pointer;padding:7px}
+.sheets-indicators{display:flex;flex-wrap:wrap;gap:10px;padding:12px 14px}
+.sheets-indicators span{display:flex;align-items:center;gap:6px;background:#f1f5f8;border:1px solid #dde7ef;padding:7px 9px;font-size:11px;color:#476b80}
+.sheets-panel form{padding:6px 14px 13px}
+.sheets-panel form label{display:grid;gap:5px;font-weight:600;font-size:11px;color:#4c657c}
+.sheets-panel form input{width:100%;border:1px solid #ccd7e1;background:#fff;min-height:36px;padding:8px;font-size:12px;border-radius:3px}
+.sheets-panel form input:focus-visible{outline:2px solid #296e9e}
+.sheets-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}
+.sheets-actions .tracker-btn.primary{width:auto;margin:0}
+.sheets-success{font-size:11px;color:#1e7453;background:#eef8f2;padding:10px 14px}
+.sheets-last{border-top:1px solid #e4ebf2;margin:0;padding:11px 14px;font-size:11px;color:#5c7488}
+.sheets-note{padding:0 14px 13px;font-size:11px;line-height:1.5;color:#6b8093;margin:0}
+.sheets-error{padding:9px 14px;margin:0;font-size:11px;color:#974337;background:#fcf1ef}
