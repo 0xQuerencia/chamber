@@ -33,7 +33,6 @@ export default function Composer({workspace,preview:demo,onRefresh}:{workspace:W
  const clients=useMemo(()=>workspace.clients.filter(c=>(c.name+" "+(c.code||"")).toLowerCase().includes(search.toLowerCase())),[workspace.clients,search]);
  const chosenTemplate=templates.find(t=>t.id===templateId);
  const effectiveBody=chosenTemplate?.body??body;
- const selectedItems=preview?.previews??[];
 
  useEffect(()=>{
   let active=true;
