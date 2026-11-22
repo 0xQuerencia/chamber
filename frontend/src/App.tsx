@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Menu, Plus, RefreshCw, Search, Settings, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, ArrowDownToLine, BriefcaseBusiness, CalendarDays, ChartColumn, ClipboardList, FolderOpen, Home, LogOut, Plus, RefreshCw, Settings, Users, X } from "lucide-react";
 import { createRecord, exportUrl, generatePeriod, getSession, getWorkspace, login, logout, patchDocument, patchTask, setup } from "./api";
 import { sampleWorkspace } from "./demo";
-import ErpDesk from "./ErpDesk";
+import {TallyGateway,TallyDataGrid,TallyTaskRegister} from "./TallyWorkspace";
+import {TallyRequestVoucher,TallyReceivedVoucher} from "./TallyForms";
 import DataTracker from "./Tracker";
 import ClientProfile from "./ClientProfile";
 import WorkBoard from "./WorkBoard";
@@ -91,6 +92,12 @@ export default function App(){
  const [mfaPending,setMfaPending]=useState<{challenge:string;enrollmentRequired:boolean;deviceLabel:string}|null>(null);
  const [workspace,setWorkspace]=useState<Workspace|null>(null);
  const [preview,setPreview]=useState(false);
+ const [shownDate,setShownDate]=useState(new Date().toISOString().slice(0,10));
+ const [datePickerOpen,setDatePickerOpen]=useState(false);
+ const [firmPickerOpen,setFirmPickerOpen]=useState(false);
+ const [expandedTracker,setExpandedTracker]=useState(false);
+ const [expandedRequest,setExpandedRequest]=useState(false);
+ const [expandedDocuments,setExpandedDocuments]=useState(false);
  const [view,setView]=useState<View>("desk");
  const [workFilter,setWorkFilter]=useState<WorkFilter>("all");
  const [query,setQuery]=useState("");
@@ -125,20 +132,20 @@ export default function App(){
   void getSession().then(async s=>{if(!alive)return;setSession(s);if(s.authenticated){const d=await getWorkspace();if(alive){setWorkspace(d);setLoadedAt(new Date().toLocaleString("en-IN"))}}}).catch(e=>{if(alive){setError(String(e));setSession({authenticated:false,needs_setup:false,user:null})}});
   return()=>{alive=false};
  },[enterPreview]);
- const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false)},[]);
+ const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false);setExpandedTracker(false);setExpandedRequest(false);setExpandedDocuments(false)},[]);
  useEffect(()=>{
   const handler=(e:KeyboardEvent)=>{
    if(!workspace)return;
    if(keyboardHelpOpen)return;
    if(e.key==="Escape"){
-    if(modal||selected||commandOpen||mobileNavOpen){setModal(null);setSelected(null);setCommandOpen(false);setMobileNavOpen(false)}
+    if(modal||selected||commandOpen||mobileNavOpen||datePickerOpen||firmPickerOpen){setModal(null);setSelected(null);setCommandOpen(false);setMobileNavOpen(false);setDatePickerOpen(false);setFirmPickerOpen(false)}
     else navigate("desk");
     goKeyAt.current=0;return;
    }
    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){
     e.preventDefault();if(!modal)setCommandOpen(true);return;
    }
-   if(modal||commandOpen||isTextInteraction(e.target))return;
+   if(modal||commandOpen||datePickerOpen||firmPickerOpen||isTextInteraction(e.target))return;
    if(e.key==="?"){e.preventDefault();setKeyboardHelpOpen(true);goKeyAt.current=0;return}
    if(e.key==="/"){
     e.preventDefault();
@@ -155,13 +162,17 @@ export default function App(){
     if(key==="g"){e.preventDefault();goKeyAt.current=Date.now();return}
     goKeyAt.current=0;
    }
+   if(e.altKey&&e.key.toLowerCase()==="g"){e.preventDefault();setCommandOpen(true);return}
+   if(e.key==="F1"||e.key==="F11"){e.preventDefault();setKeyboardHelpOpen(true);return}
+   if(e.key==="F2"){e.preventDefault();setDatePickerOpen(true);return}
+   if(e.key==="F3"){e.preventDefault();setFirmPickerOpen(true);return}
    if(e.altKey&&e.key.toLowerCase()==="n"){e.preventDefault();if(!preview&&privileged)setModal("task");return}
    if(e.altKey&&e.key.toLowerCase()==="c"){e.preventDefault();if(!preview&&privileged)setModal("client");return}
-   const pages:Record<string,View>={F1:"desk",F2:"clients",F3:"team",F4:"activity",F5:"work",F6:"documents",F7:"compliance",F8:"tracker",F9:"board"};
+   const pages:Record<string,View>={F4:"clients",F5:"work",F6:"documents",F7:"requests",F8:"tracker",F9:"board",F10:"desk",F12:"settings"};
    if(pages[e.key]){e.preventDefault();navigate(pages[e.key])}
   };
   document.addEventListener("keydown",handler);return()=>document.removeEventListener("keydown",handler);
- },[workspace,navigate,preview,privileged,keyboardHelpOpen,modal,selected,commandOpen,mobileNavOpen]);
+ },[workspace,navigate,preview,privileged,keyboardHelpOpen,modal,selected,commandOpen,mobileNavOpen,datePickerOpen,firmPickerOpen]);
  const mutate=async(action:()=>Promise<unknown>,message="Record saved.")=>{
   if(preview){flash("Read-only preview: changes are disabled.");return}
   setBusy(true);setError("");
@@ -249,12 +260,7 @@ export default function App(){
  ];
  function registerSearch(placeholder:string){return <input id="register-search" className="search" aria-label={placeholder} value={query} onChange={e=>setQuery(e.target.value)} placeholder={placeholder}/>}
  function previewBanner(){return preview?<div className="notice" style={{marginBottom:18}}>SAMPLE PREVIEW · Fictional records. All mutations, exports and messages are disabled. <button className="text-button" onClick={()=>window.location.assign("/")}>Exit preview</button></div>:null}
- function showDesk(){
-  return <>{previewBanner()}<ErpDesk data={workspace!} today={today}
-    onNavigate={(page,filter)=>{navigate(page);if(filter)setWorkFilter(filter)}}
-    onTask={id=>{navigate("work");setSelected(id)}}
-    onDocument={id=>{navigate("documents");setSelected(id)}}/></>;
- }
+ function showDesk(){return <TallyGateway workspace={workspace!} onNavigate={navigate} preview={preview}/>;}
  function showWork(){
   const options:[WorkFilter,string][]=[["all","All work"],["mine","Assigned to me"],["todo","Pending"],["waiting","Waiting"],["review","In review"],["overdue","Overdue"],["done","Completed"]];
   const detail=workspace!.tasks.find(t=>t.id===selected);
@@ -364,7 +370,7 @@ export default function App(){
    </>;
   }
  let page:ReactNode=null;
- if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<WorkBoard workspace={workspace} preview={preview} mode="board" onRefresh={refresh}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=showDocuments();break;case "tracker":page=<DataTracker workspace={workspace} preview={preview}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
+ if(workspace){switch(view){case "desk":page=showDesk();break;case "work":page=showWork();break;case "board":page=<TallyTaskRegister workspace={workspace} onNavigate={navigate} preview={preview} onOpen={t=>{navigate("work");setSelected(t.id)}}/>;break;case "myday":page=<WorkBoard workspace={workspace} preview={preview} mode="myday" onRefresh={refresh}/>;break;case "clients":page=showClients();break;case "import":page=<ImportWizard workspace={workspace} preview={preview} onRefresh={refresh}/>;break;case "requests":page=expandedRequest?<Composer workspace={workspace} preview={preview} onRefresh={refresh}/>:<TallyRequestVoucher workspace={workspace} preview={preview} onAdvanced={()=>setExpandedRequest(true)}/>;break;case "reminders":page=<Reminders workspace={workspace} preview={preview}/>;break;case "insights":page=<Insights preview={preview} demoCount={workspace.tasks.length} onNavigate={navigate}/>;break;case "documents":page=expandedDocuments?showDocuments():<TallyReceivedVoucher workspace={workspace} preview={preview} onAdvanced={()=>setExpandedDocuments(true)}/>;break;case "tracker":page=expandedTracker?<DataTracker workspace={workspace} preview={preview}/>:<TallyDataGrid workspace={workspace} preview={preview} onNavigate={navigate} onOpenRecord={()=>setExpandedTracker(true)}/>;break;case "compliance":page=showCompliance();break;case "team":page=showTeam();break;case "reports":page=showReports();break;case "activity":page=showActivity();break;case "security":page=<SecurityLog principal={Boolean(principal)} preview={preview}/>;break;case "onboarding":page=<Onboarding workspace={workspace} preview={preview} onNavigate={navigate} onRefresh={refresh}/>;break;case "settings":page=showSettings();break;}}
  if(!session)return <main className="initial-loading">Loading Chamber…</main>;
  const portalToken=typeof window==="undefined"?null:window.location.hash.match(/^#\/portal\/([0-9a-f]{64})$/)?.[1];
  if(portalToken)return <ClientPortal token={portalToken}/>;
@@ -374,88 +380,56 @@ export default function App(){
       setLoadedAt(new Date().toLocaleString("en-IN"));setMfaPending(null);setError("");
     }}/>;
  if(!session.authenticated||!workspace)return <Authentication needsSetup={session.needs_setup} onSubmit={handleAuth} error={error} busy={busy} onPreview={enterPreview}/>;
- const groups:{name:string;items:View[]}[]=[
-  {name:"MASTERS",items:["clients","team","import"]},
-  {name:"TRANSACTIONS",items:["work","board","myday","documents","tracker","requests","reminders"]},
-  {name:"REPORTS",items:["compliance","insights","reports","activity"]},
-  {name:"UTILITIES",items:[...(principal?["onboarding" as View,"security" as View]:[]),"settings"]}
+ const currentPage=view==="desk"?"Gateway of Chamber":({tracker:"Pending Data Tracker",board:"Task Allocation",requests:"Data Request",documents:"Data Received",work:"Staff Work Register"} as Partial<Record<View,string>>)[view]||navItems.find(n=>n.id===view)?.label||"Gateway of Chamber";
+ const rightActions:{key:string;label:string;onSelect:()=>void}[]=[
+  {key:"F2",label:"Date",onSelect:()=>setDatePickerOpen(true)},
+  {key:"F3",label:"Firm",onSelect:()=>setFirmPickerOpen(true)},
+  {key:"F4",label:"Clients",onSelect:()=>navigate("clients")},
+  {key:"F5",label:"Work",onSelect:()=>navigate("work")},
+  {key:"F6",label:"Documents",onSelect:()=>navigate("documents")},
+  {key:"F7",label:"Request",onSelect:()=>navigate("requests")},
+  {key:"F8",label:"Receive",onSelect:()=>navigate("tracker")},
+  {key:"F9",label:"Tasks",onSelect:()=>navigate("board")},
+  {key:"F10",label:"Gateway",onSelect:()=>navigate("desk")},
+  {key:"F11",label:"Features",onSelect:()=>setKeyboardHelpOpen(true)},
+  {key:"F12",label:"Configure",onSelect:()=>navigate("settings")}
  ];
- const shortcutActions:{key:string;label:string;onSelect:()=>void;disabled?:boolean}[]=[
-  {key:"F1",label:"Gateway / Desk",onSelect:()=>navigate("desk")},
-  {key:"F2",label:"Client Master",onSelect:()=>navigate("clients")},
-  {key:"F3",label:"Team Register",onSelect:()=>navigate("team")},
-  {key:"F4",label:"Activity & Sync",onSelect:()=>navigate("activity")},
-  {key:"F5",label:"Work Register",onSelect:()=>navigate("work")},
-  {key:"F6",label:"Document Register",onSelect:()=>navigate("documents")},
-  {key:"F7",label:"Compliance",onSelect:()=>navigate("compliance")},
-   {key:"F8",label:"Data Tracker",onSelect:()=>navigate("tracker")},
-   {key:"F9",label:"Work Board",onSelect:()=>navigate("board")},
-  {key:"Alt+N",label:"New Assignment",onSelect:()=>open("task"),disabled:preview||!privileged},
-  {key:"Alt+C",label:"New Client",onSelect:()=>open("client"),disabled:preview||!privileged},
-  {key:"Ctrl+K",label:"Go To / Search",onSelect:()=>setCommandOpen(true)}
- ];
- const currentPage=navItems.find(n=>n.id===view)?.label||"Desk";
- return <div className={"app-layout erp-app"+(mobileNavOpen?" mobile-open":"")}>
-   <a href="#erp-main" className="erp-skip-link">Skip to contents</a>
-   <header className="topbar erp-toolbar">
-     <span className="erp-brand"><BriefcaseBusiness size={18}/> Chamber</span>
-     <span className="erp-edition">CA Practice Management</span>
-     <div className="erp-toolbar-buttons">
-       <button type="button" onClick={()=>setCommandOpen(true)}><span className="erp-toolbar-key">G</span> Go To</button>
-        <button type="button" onClick={()=>setKeyboardHelpOpen(true)} aria-label="Keyboard shortcut help"><span className="erp-toolbar-key">?</span> Help</button>
-       <button type="button" onClick={()=>navigate("work")}><span className="erp-toolbar-key">W</span> Work</button>
-       <button type="button" onClick={()=>navigate("clients")}><span className="erp-toolbar-key">C</span> Clients</button>
-       <button type="button" onClick={()=>navigate("reports")}><span className="erp-toolbar-key">R</span> Reports</button>
-     </div>
-     <button className="erp-mobile-toggle" type="button" aria-label="Show navigation" onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={20}/></button>
-     <span className="erp-toolbar-user">{workspace.user.name} <span>({workspace.user.role})</span></span>
-   </header>
-   <div className="erp-companybar">
-     <div className="erp-company-title"><span>Company</span><strong>{workspace.firm.name}</strong></div>
-     <div className="erp-company-period"><span>Financial Year</span><strong>{fyNow()}</strong></div>
-     <div className="erp-company-screen"><span>Screen</span><strong>{currentPage}</strong></div>
-     {preview&&<span className="erp-sample-label">SAMPLE DATA · READ ONLY</span>}
-     <button className="erp-company-search" type="button" aria-label="Go to any record" onClick={()=>setCommandOpen(true)}><Search size={14}/> Go To / Search <kbd>Ctrl+K</kbd></button>
-   </div>
-   {mobileNavOpen&&<button className="erp-sidebar-backdrop" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"/>}
-   <aside className="sidebar erp-menu" aria-label="Chamber modules">
-     <div className="erp-menu-caption">GATEWAY OF CHAMBER</div>
-     <button className={"erp-menu-entry erp-menu-home"+(view==="desk"?" selected":"")} type="button" onClick={()=>navigate("desk")} aria-current={view==="desk"?"page":undefined}><Home size={15}/> Gateway / Desk</button>
-     {groups.map(g=><div className="erp-menu-group" key={g.name}>
-       <div className="erp-menu-group-title">{g.name}</div>
-       {g.items.map(id=>{const item=navItems.find(n=>n.id===id)!;return <button key={id} type="button" className={"erp-menu-entry"+(view===id?" selected":"")} onClick={()=>navigate(id)} aria-current={view===id?"page":undefined}>{item.label}</button>})}
-     </div>)}
-     <div className="erp-menu-spacer"/>
-     <div className="erp-menu-footer"><span>Current User</span><strong>{workspace.user.name}</strong><span>{workspace.user.role}</span></div>
-   </aside>
-   <main id="erp-main" className="main-area erp-content" tabIndex={-1}>
-     {page}
-     {error&&<div className="alert" role="alert">{error}</div>}
+ const dateText=new Date(shownDate+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+ const hints=view==="desk"?"↑↓ Select · Enter Open · Alt+G Go To · F1 Help":view==="tracker"&&!expandedTracker?"↑↓←→ Move · Enter Open entry · F4–F9 Actions · Alt+G Go To · Esc Back":view==="board"?"↑↓ Move · Enter Open assignment · Alt+G Go To · Esc Back":"Alt+G Go To · F2 Date · F3 Firm · F4–F12 Navigate · Esc Gateway";
+ return <div className="tp-app">
+  <a href="#erp-main" className="tp-skip-link">Skip to contents</a>
+  <header className="tp-topbar" aria-label="Main toolbar">
+   <button type="button" onClick={()=>setFirmPickerOpen(true)}><u>K</u>: Firm</button>
+   <button type="button" onClick={()=>navigate("tracker")}><u>Y</u>: Data</button>
+   <button type="button" onClick={()=>navigate("import")}><u>Z</u>: Exchange</button>
+   <button type="button" onClick={()=>setCommandOpen(true)}><u>G</u>: Go To</button>
+   <button type="button" onClick={()=>navigate("import")}><u>O</u>: Import</button>
+   <button type="button" onClick={()=>download("clients")}><u>E</u>: Export</button>
+   <button type="button" onClick={()=>navigate("requests")}><u>M</u>: Share</button>
+   <button type="button" onClick={()=>window.print()}><u>P</u>: Print</button>
+   <button type="button" onClick={()=>setKeyboardHelpOpen(true)}>F1: Help</button>
+  </header>
+  <div className="tp-context">
+   <span className="tp-context-firm">{workspace.firm.name} · FY {fyNow()} · {dateText}</span>
+   <strong>{currentPage}</strong>
+   {preview&&<span className="tp-preview-chip">SAMPLE DATA · READ ONLY</span>}
+  </div>
+  <div className="tp-middle">
+   <main id="erp-main" className={"tp-workspace"+(view==="desk"?" tp-workspace-gateway":"")} tabIndex={-1}>
+    {page}
+    {error&&<div className="alert" role="alert">{error}</div>}
    </main>
-   <aside className="erp-actionbar" aria-label="Function key actions">
-     <div className="erp-actionbar-heading">Function Keys</div>
-     {shortcutActions.map(a=><button key={a.key} type="button" disabled={a.disabled} onClick={a.onSelect}>
-       <kbd>{a.key}</kbd><span>{a.label}</span>
-     </button>)}
-     <div className="erp-actionbar-spacer"/>
-     <button type="button" onClick={()=>{setSelected(null);setModal(null);navigate("desk")}}><kbd>Esc</kbd><span>Gateway</span></button>
+   <aside className="tp-function" aria-label="Function key actions">
+    {rightActions.map(a=><button key={a.key} type="button" onClick={a.onSelect}>{a.key}: {a.label}</button>)}
    </aside>
-   <footer className="statusbar erp-statusbar">
-     <span>{preview?"Preview Mode":"Company Data"}</span>
-     <span className="erp-status-divider">│</span>
-     <span>Esc: Back</span>
-     <span className="erp-status-divider">│</span>
-     <span>Enter: Select</span>
-     <span className="erp-status-divider">│</span>
-     <span>Ctrl+K: Go To</span>
-     <span className="erp-status-divider">│</span>
-     <span>?: Shortcuts</span>
-     <span className="erp-status-spacer"/>
-     <span>Chamber · CA Firm Operations</span>
-   </footer>
-   {modal&&<RecordForm kind={modal} workspace={workspace} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
-   {commandOpen&&<CommandPalette options={commands} onClose={()=>setCommandOpen(false)}/>}
-   {keyboardHelpOpen&&<KeyboardHelp onClose={()=>setKeyboardHelpOpen(false)}/>}
-   {toast&&<div className="toast" role="status">{toast}</div>}
+  </div>
+  <footer className="tp-statusbar"><span>{hints}</span><span>{workspace.firm.name} · {preview?"Read-only preview":"Ready"}</span></footer>
+  {modal&&<RecordForm kind={modal} workspace={workspace} onCancel={()=>setModal(null)} onSave={create} busy={busy} error={error}/>}
+  {commandOpen&&<CommandPalette options={commands} onClose={()=>setCommandOpen(false)}/>}
+  {keyboardHelpOpen&&<KeyboardHelp onClose={()=>setKeyboardHelpOpen(false)}/>}
+  {(datePickerOpen||firmPickerOpen)&&<div className="tp-overlay" onClick={()=>{setDatePickerOpen(false);setFirmPickerOpen(false)}}/>}
+  {datePickerOpen&&<section className="tp-selector" role="dialog" aria-modal="true" aria-label="Select Date"><div className="tp-panel-title">Select Date</div><label htmlFor="tp-date">Working date</label><input id="tp-date" type="date" value={shownDate} onChange={e=>setShownDate(e.target.value)}/><button type="button" onClick={()=>setDatePickerOpen(false)}>Accept · Enter</button></section>}
+  {firmPickerOpen&&<section className="tp-selector" role="dialog" aria-modal="true" aria-label="Select Firm"><div className="tp-panel-title">Select Firm</div><button type="button" onClick={()=>setFirmPickerOpen(false)}>{workspace.firm.name} · Current firm</button></section>}
+  {toast&&<div className="toast" role="status">{toast}</div>}
  </div>;
 }
