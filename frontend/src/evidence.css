@@ -1,0 +1,15 @@
+/* Private document evidence: only scanned clean files become downloadable. */
+.evidence-attachments{margin:6px 0 0 24px;padding:0 0 4px}
+.evidence-toggle,.evidence-refresh{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#356b8c;border:0;background:transparent;cursor:pointer;text-decoration:underline;padding:4px 0}
+.evidence-content{background:#f8fafc;border:1px solid #e1e9f1;padding:9px;margin:6px 0}
+.evidence-info{font-size:10px;color:#6e7e8d;line-height:1.5;margin:5px 0 8px}
+.evidence-picker{font-size:11px;color:#3b607a;display:grid;gap:6px;font-weight:600}
+.evidence-picker input{font-size:10px;color:#435e72;max-width:100%;border:1px dashed #c5d7e4;padding:7px;background:#fff}
+.evidence-error{color:#983b33;background:#fff0ee;padding:5px;font-size:10px}
+.evidence-success{color:#276c4a;background:#eff9f2;padding:5px;font-size:10px}
+.evidence-file{display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid #e7edf2}
+.evidence-file>span{color:#567c94}.evidence-file>div{flex:1;min-width:0}
+.evidence-file strong{font-size:11px;display:block;overflow-wrap:anywhere}
+.evidence-file small{font-size:10px;color:#718599;display:block;margin-top:3px}
+.evidence-file a{display:flex;color:#2c7094;text-decoration:none;padding:5px;border:1px solid #b9d2de;border-radius:3px}
+.evidence-toggle:focus-visible,.evidence-refresh:focus-visible,.evidence-file a:focus-visible{outline:2px solid #276ea3;outline-offset:2px}

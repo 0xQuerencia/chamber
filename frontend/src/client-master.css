@@ -1,0 +1,29 @@
+/* Extended client master within Chamber's compact ERP register shell. */
+.client-profile{min-width:0;overflow:auto;max-height:calc(100vh - 170px)}
+.client-tabs{display:flex;flex-wrap:wrap;gap:3px;border-top:1px solid #dce3ec;border-bottom:1px solid #dce3ec;margin:12px 0;padding:6px 0}
+.client-tabs button{border:0;background:transparent;color:#50647a;font-size:11px;padding:7px 8px;border-radius:3px;cursor:pointer}
+.client-tabs button.active{background:#dce9f4;color:#143c63;font-weight:700}
+.client-tabs button:focus-visible,.client-actions button:focus-visible,.client-subheading button:focus-visible{outline:2px solid #1d6eae;outline-offset:2px}
+.client-overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.client-overview label{display:block;font-size:10px;text-transform:uppercase;color:#6c7d8e;font-weight:600;letter-spacing:.03em}
+.client-overview span{font-size:12px;overflow-wrap:anywhere}
+.client-actions{display:flex;gap:7px;margin:12px 0 4px;flex-wrap:wrap}
+.client-actions button,.client-subheading button{display:inline-flex;gap:5px;align-items:center;justify-content:center;background:white;border:1px solid #c9d4de;border-radius:4px;color:#1f4f73;font-size:11px;padding:6px 9px;cursor:pointer}
+.client-actions button:disabled,.client-subheading button:disabled{opacity:.55}
+.client-subsection{border-top:1px solid #dfe6ed;padding:13px 0 5px;margin-top:16px}
+.client-subsection h3{font-size:13px;font-weight:700;margin:0 0 10px}
+.client-subheading{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:9px}
+.client-subheading h3{margin:0}
+.client-contact{position:relative;display:block;border:1px solid #e2e9f0;background:#fbfcfd;border-radius:4px;padding:10px;margin:7px 0;font-size:12px}
+.client-contact strong{font-size:12px;display:block;color:#1e3c54;overflow-wrap:anywhere}
+.client-contact span{font-size:11px;color:#718093;display:block;margin:3px 0}
+.client-contact p{font-size:11px;color:#586b7b;margin:6px 0 2px;overflow-wrap:anywhere}
+.client-contact small{font-size:10px;color:#346b57;display:block}
+.client-form{background:#f3f6fa;border:1px solid #dbe4ee;border-radius:4px;padding:12px;margin:12px 0;display:flex;flex-direction:column;gap:10px}
+.client-field{font-size:11px;display:flex;flex-direction:column;gap:4px;color:#52687f;font-weight:600}
+.client-field input,.client-field select{border:1px solid #c9d3df;background:white;color:#1c3247;min-height:33px;border-radius:3px;padding:6px 8px;font:12px inherit}
+.client-field input:focus-visible,.client-field select:focus-visible{outline:2px solid #2b729f;outline-offset:1px}
+.client-check{font-size:11px;color:#475e73;display:flex;align-items:center;gap:8px;line-height:1.3}
+.client-check input{accent-color:#1f6f5c}
+.client-notice{font-size:12px;border:1px solid #c7ddd2;color:#176448;background:#ecf7f0;padding:8px;border-radius:3px}
+@media(max-width:900px){.client-profile{max-height:none}.client-tabs{flex-wrap:nowrap;overflow-x:auto}}
