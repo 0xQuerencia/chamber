@@ -1,4 +1,5 @@
-import {canReadClient} from "./permissions.js";
+import {canReadClient,clientScope} from "./permissions.js";
+import {workloadWindow,capacityPercent} from "./workload-domain.js";
 // Review, assignment, time and comment workflows. No device surveillance is performed.
 export async function handleWork(request,env,user,deps){
  const {output,fail,clean,audit,id,iso,isPrivileged,bodyJSON,validateFirmUser}=deps;
@@ -6,24 +7,26 @@ export async function handleWork(request,env,user,deps){
  const elevated=isPrivileged(user);
  if(path==="/api/workload"&&method==="GET"){
   if(!elevated)return fail("Insufficient permission",403);
-  const people=(await db.prepare("SELECT id,name,role,capacity_hours_per_week FROM users WHERE firm_id=? AND active=1 ORDER BY name")
-   .bind(user.firm_id).all()).results;
-  const dueSoon=new Date();dueSoon.setUTCDate(dueSoon.getUTCDate()+14);
-  const end=dueSoon.toISOString().slice(0,10);
-  const work=(await db.prepare("SELECT assignee_id,COUNT(*) AS assigned,SUM(estimated_minutes) AS estimated_minutes,SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS active FROM tasks WHERE firm_id=? AND status!='done' AND (due_date IS NULL OR due_date<=?) GROUP BY assignee_id")
-   .bind(user.firm_id,end).all()).results;
-  const timers=(await db.prepare("SELECT user_id,COUNT(*) AS running FROM time_entries WHERE firm_id=? AND stopped_at IS NULL GROUP BY user_id")
-   .bind(user.firm_id).all()).results;
+  const manager=user.role==="manager",scope=clientScope(user,"c");
+  const people=(await db.prepare("SELECT id,name,role,capacity_hours_per_week FROM users WHERE firm_id=? AND active=1"+
+   (manager?" AND (id=? OR manager_id=?)":"")+" ORDER BY name")
+   .bind(user.firm_id,...(manager?[user.id,user.id]:[])).all()).results;
+  const {end}=workloadWindow(new Date());
+  const memberClause=manager?" AND (t.assignee_id IS NULL OR EXISTS (SELECT 1 FROM users member WHERE member.firm_id=t.firm_id AND member.id=t.assignee_id AND member.active=1 AND (member.id=? OR member.manager_id=?)))":"";
+  const work=(await db.prepare("SELECT t.assignee_id,COUNT(*) AS assigned,SUM(t.estimated_minutes) AS estimated_minutes,SUM(CASE WHEN t.status='in_progress' THEN 1 ELSE 0 END) AS active FROM tasks t JOIN clients c ON c.id=t.client_id AND c.firm_id=t.firm_id WHERE t.firm_id=? AND c.archived_at IS NULL AND "+scope.sql+" AND t.status!='done' AND (t.due_date IS NULL OR t.due_date<=?)"+memberClause+" GROUP BY t.assignee_id")
+   .bind(user.firm_id,...scope.args,end,...(manager?[user.id,user.id]:[])).all()).results;
+  const timers=(await db.prepare("SELECT e.user_id,COUNT(*) AS running FROM time_entries e JOIN tasks t ON t.id=e.task_id AND t.firm_id=e.firm_id JOIN clients c ON c.id=t.client_id AND c.firm_id=t.firm_id WHERE e.firm_id=? AND e.stopped_at IS NULL AND c.archived_at IS NULL AND "+scope.sql+" GROUP BY e.user_id")
+   .bind(user.firm_id,...scope.args).all()).results;
   const members=people.map(p=>{
    const a=work.find(w=>w.assignee_id===p.id),timer=timers.find(t=>t.user_id===p.id);
    const minutes=Number(a?.estimated_minutes||0);
    return {id:p.id,name:p.name,role:p.role,capacity_hours_per_week:p.capacity_hours_per_week,
     open_tasks:Number(a?.assigned||0),estimated_minutes:minutes,
-    load_percent:Math.round(minutes/(Number(p.capacity_hours_per_week)*60)*100),
+    load_percent:capacityPercent(minutes,Number(p.capacity_hours_per_week)),
     work_state:Number(timer?.running||0)>0||Number(a?.active||0)>0?"busy":"free"};
   });
   return output({members,unassigned:work.find(w=>w.assignee_id===null)?.assigned??0,
-   policy:"Statuses reflect open Chamber work and manual timers only; no keystrokes or screenshots."});
+   policy:"Estimates use 14 calendar days of nominal capacity, including overdue and undated work. Leave and work outside Chamber are not measured."});
  }
  const match=path.match(/^\/api\/tasks\/([a-f0-9-]+)\/(assignment|review|comments|timer|time)$/);
  if(!match)return fail("Not found",404);
