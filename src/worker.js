@@ -14,6 +14,7 @@ import { normalizeIdentifier, validPan, validGstin, validClientPhone } from "./c
 import {clientScope,canReadClient,validClientManager} from "./permissions.js";
 import {handleSecurity} from "./security.js";
 import {handleOnboarding} from "./onboarding.js";
+import {handleProcedures} from "./procedures.js";
 import {handleDelivery,drainDeliveryQueue} from "./delivery.js";
 import {handleWhatsAppWebhook} from "./delivery-webhooks.js";
 import {handlePortalLinks,handlePublicPortal,handlePortalNotifications} from "./portal.js";
@@ -468,6 +469,7 @@ async function api(request,env) {
     }
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
     if(path.startsWith("/api/security/"))return handleSecurity(request,env,user,{output,fail,clean});
+    if(path==="/api/procedures"||path.startsWith("/api/procedures/"))return handleProcedures(request,env,user,{output,fail,clean,audit,id,iso,bodyJSON});
     if(path==="/api/onboarding"||path==="/api/onboarding/profile")return handleOnboarding(request,env,user,{output,fail,clean,audit,iso,bodyJSON,validEmail});
     if(path.startsWith("/api/compliance/"))return handleCompliance(request,env,user,{output,fail,clean,bodyJSON,audit,id,iso});
     if(path==="/api/portal/links"||/^\/api\/portal\/links\/[a-f0-9-]+\/revoke$/.test(path))

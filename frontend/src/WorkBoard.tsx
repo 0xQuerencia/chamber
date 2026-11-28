@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import PortalNotifications from "./PortalNotifications";
+import {TaskProcedure} from "./FirmProcedures";
 import { Check, CheckCheck, ClipboardList, Clock, MessageSquare, Play, Square, UserRound, X } from "lucide-react";
 import { addTaskComment, assignTask, getTaskComments, getTaskHistory, getTaskTime, getWorkload, patchTask, reviewTask, toggleTaskTimer } from "./api";
 import type { Task, TaskComment, TaskHistoryEvent, TimerEntry, WorkloadMember, Workspace } from "./types";
@@ -141,6 +142,7 @@ export default function WorkBoard({workspace,preview,mode,onRefresh}:{
      <div><dt>Due</dt><dd>{date(current.due_date)}</dd></div>
      <div><dt>Stage</dt><dd>{fmt(current.status)}</dd></div>
     </dl>
+    <TaskProcedure key={current.id} taskId={current.id} preview={preview}/>
     {privileged&&<section className="board-section">
      <button type="button" className="tracker-btn" onClick={()=>setAssignOpen(v=>!v)} disabled={preview}>Assign / change reviewer</button>
      {assignOpen&&<div className="board-form">

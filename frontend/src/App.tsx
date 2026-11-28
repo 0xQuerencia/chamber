@@ -15,6 +15,7 @@ import KeyboardHelp from "./KeyboardHelp";
 import MfaAuth from "./MfaAuth";
 import SecurityLog from "./SecurityLog";
 import Onboarding from "./Onboarding";
+import FirmProcedures,{TaskProcedure} from "./FirmProcedures";
 import ComplianceRules from "./ComplianceRules";
 import ClientPortal from "./ClientPortal";
 import {goShortcuts,isTextInteraction} from "./keyboard";
@@ -203,6 +204,7 @@ export default function App(){
  const taskDetails=(t:Task)=> <div className="detail-card"><div className="detail-head"><div><p className="hint">ASSIGNMENT DETAILS</p><h2>{t.title}</h2><p className="muted small">{clientName(t.client_id)} · {t.service} · {t.period??"No period"}</p></div><button aria-label="Close" className="close-button" onClick={()=>setSelected(null)}><X size={18}/></button></div>
   <div className="detail-kv"><div><label>Assignee</label><span>{memberName(t.assignee_id)}</span></div><div><label>Due date</label><span>{formatDate(t.due_date)}</span></div><div><label>Ask by</label><span>{formatDate(t.ask_by_date)}</span></div><div><label>Reviewer</label><span>{memberName(t.reviewer_id)}</span></div><div><label>Priority</label><StatusBadge status={t.priority}/></div></div>
   <div className="field" style={{marginTop:20}}><label htmlFor="task-status">Update status</label><select id="task-status" value={t.status} disabled={busy||preview||(!privileged&&t.status==="done")} onChange={e=>changeTask(t,e.target.value as TaskStatus)}>{taskStatuses.filter(st=>privileged||st!=="done").map(st=><option key={st} value={st}>{statusLabel(st)}</option>)}</select></div>
+  <TaskProcedure key={t.id} taskId={t.id} preview={preview}/>
   <div className="detail-tabs"><span>Required documents</span></div>{workspace?.documents.filter(d=>d.task_id===t.id).map(d=><div className="detail-mini" key={d.id}><strong>{d.name}</strong> <StatusBadge status={d.status}/></div>)}
   {workspace?.documents.filter(d=>d.task_id===t.id).length===0&&<p className="muted small">No document requirements.</p>}
   <div style={{marginTop:15}}><Button onClick={()=>open("document")}><Plus size={15}/> Add requirement</Button></div>
@@ -367,6 +369,7 @@ export default function App(){
     </Panel>
     <DeviceManager preview={preview} role={workspace!.user.role}/>
     <SheetsSettings preview={preview} principal={workspace!.user.role==="principal"}/>
+    {principal&&<FirmProcedures workspace={workspace!} preview={preview}/>}
    </>;
   }
  let page:ReactNode=null;
