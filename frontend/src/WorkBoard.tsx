@@ -23,11 +23,11 @@ function whichLane(t:Task):Lane{
  if(!t.assignee_id)return "unassigned";
  return "assigned";
 }
-export default function WorkBoard({workspace,preview,mode,onRefresh}:{
- workspace:Workspace;preview:boolean;mode:Mode;onRefresh:()=>Promise<void>
+export default function WorkBoard({workspace,preview,mode,onRefresh,initialTaskId=null}:{
+ workspace:Workspace;preview:boolean;mode:Mode;onRefresh:()=>Promise<void>;initialTaskId?:string|null
 }){
  const privileged=workspace.user.role==="principal"||workspace.user.role==="manager";
- const [activeId,setActiveId]=useState<string|null>(null);
+ const [activeId,setActiveId]=useState<string|null>(initialTaskId);
  const [checked,setChecked]=useState<string[]>([]);
  const [assignTo,setAssignTo]=useState("");
  const [reviewer,setReviewer]=useState("");
@@ -153,20 +153,20 @@ export default function WorkBoard({workspace,preview,mode,onRefresh}:{
       <button type="button" className="tracker-btn primary" disabled={busy||preview} onClick={()=>void saveAssignment()}>Save assignment</button>
      </div>}
     </section>}
-    {current.status!=="done"&&<section className="board-section">
+    {current.status!=="done"&&current.status!=="review"&&(privileged||current.assignee_id===workspace.user.id)&&<section className="board-section">
      <h3>Status</h3><div className="board-status-actions">
       {(["todo","in_progress","waiting","blocked","review"] as const).map(status=><button key={status} disabled={busy||preview||current.status===status} onClick={()=>void doAction(()=>patchTask(current.id,status),"Status changed.")}>{fmt(status)}</button>)}
      </div>
     </section>}
-    {current.status==="review"&&privileged&&<section className="board-section">
+    {current.status==="review"&&(privileged||current.reviewer_id===workspace.user.id)&&<section className="board-section">
      <h3><CheckCheck size={15}/> Reviewer decision</h3>
      <textarea value={reviewNote} onChange={e=>setReviewNote(e.target.value)} rows={3} placeholder="Review note or reason for returning work"/>
      <div className="board-actions">
-      <button disabled={busy||preview} onClick={()=>void doAction(()=>reviewTask(current.id,"approve",reviewNote),"Task approved.")}><Check size={14}/> Approve</button>
+      <button disabled={busy||preview||(current.assignee_id===workspace.user.id&&workspace.user.role!=="principal")} onClick={()=>void doAction(()=>reviewTask(current.id,"approve",reviewNote),"Task approved.")}><Check size={14}/> Approve</button>
       <button disabled={busy||preview||!reviewNote.trim()} onClick={()=>void doAction(()=>reviewTask(current.id,"return",reviewNote),"Task returned.")}>Return for changes</button>
      </div>
     </section>}
-    {current.status!=="done"&&<section className="board-section">
+    {(activeTime||(!["done","review","waiting","blocked"].includes(current.status)&&(privileged||current.assignee_id===workspace.user.id)))&&<section className="board-section">
      <h3><Clock size={15}/> Work timer</h3>
      <p className="board-policy">Only records time when you explicitly start and stop it.</p>
      <button className="tracker-btn" disabled={busy||preview} onClick={()=>void doAction(()=>toggleTaskTimer(current.id,activeTime?"stop":"start"),activeTime?"Timer stopped.":"Timer started.")}>

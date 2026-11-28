@@ -66,9 +66,10 @@ export async function handleWork(request,env,user,deps){
   if(task.status!=="review"||!["approve","return"].includes(decision))return fail("Task must be in review",409);
   if(decision==="return"&&!note)return fail("A reason is required when returning work");
   if(decision==="approve"){
-   const pending=await db.prepare("SELECT COUNT(*) AS count FROM documents WHERE firm_id=? AND task_id=? AND status NOT IN ('received','verified','not_applicable')")
+   if(task.assignee_id===user.id&&user.role!=="principal")return fail("An independent reviewer must approve this work",403);
+   const pending=await db.prepare("SELECT COUNT(*) AS count FROM documents WHERE firm_id=? AND task_id=? AND status NOT IN ('verified','not_applicable')")
     .bind(user.firm_id,taskId).first();
-   if(Number(pending?.count||0)>0)return fail("Required client information is still missing",409);
+   if(Number(pending?.count||0)>0)return fail("Verify or explicitly waive all required client information before approval",409);
   }
   const status=decision==="approve"?"done":"in_progress",at=iso();
   await db.batch([
@@ -103,7 +104,7 @@ export async function handleWork(request,env,user,deps){
   if(!["start","stop"].includes(action))return fail("Timer action must be start or stop");
   const at=iso();
   if(action==="start"){
-   if(task.status==="done"||task.status==="review")return fail("Cannot start a completed or review task",409);
+   if(task.status==="done"||task.status==="review"||task.status==="waiting"||task.status==="blocked")return fail("Resume actionable work before starting the timer",409);
    if(!assigned&&!elevated)return fail("Only the assignee can start the timer",403);
    try{
     await db.batch([
