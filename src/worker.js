@@ -240,6 +240,16 @@ async function handleUpdateTask(taskId, data, env, user) {
   if (!isPrivileged(user) && (previous.assignee_id!==user.id || previous.status==="done")) return fail("Insufficient permission",403);
   const status=data.status===undefined?previous.status:safeStatus(data.status);
   if (!status || !statusForRole(user.role,status)) return fail("Status not permitted");
+  if(status==="done"&&previous.status!=="done")return fail("Submit for review and use the reviewer approval action to complete work",409);
+  if(previous.status==="review"&&status!=="review")return fail("Use the reviewer decision to return work",409);
+  if(status==="review"&&previous.status!=="review"){
+    const [pending,running]=await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) AS count FROM documents WHERE firm_id=? AND task_id=? AND status NOT IN ('received','verified','not_applicable')").bind(user.firm_id,taskId).first(),
+      env.DB.prepare("SELECT id FROM time_entries WHERE firm_id=? AND task_id=? AND stopped_at IS NULL LIMIT 1").bind(user.firm_id,taskId).first()
+    ]);
+    if(Number(pending?.count||0)>0)return fail("Receive the required client information before submitting for review",409);
+    if(running)return fail("Stop running work timers before submitting for review",409);
+  }
   const assignee=isPrivileged(user) && data.assignee_id!==undefined?clean(data.assignee_id,80):previous.assignee_id;
   if (!(await validateFirmUser(env.DB,user.firm_id,assignee))) return fail("Assignee not found in firm");
   if(user.role==="manager"&&assignee){
