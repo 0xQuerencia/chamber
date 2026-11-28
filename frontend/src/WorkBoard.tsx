@@ -103,10 +103,10 @@ export default function WorkBoard({workspace,preview,mode,onRefresh}:{
   {privileged&&mode==="board"&&workload.length>0&&<section className="board-people" aria-label="Assignment capacity">
    <h2>Team workload <small>Next 14 days</small></h2>
    <div className="board-people-list">{workload.map(m=><div key={m.id} className="board-person">
-    <div><strong>{m.name}</strong><small>{m.work_state==="busy"?"Busy with Chamber work":"Free of active Chamber work"}</small></div>
-    <div className="board-load"><div><span style={{width:Math.min(100,m.load_percent)+"%"}}/></div><small>{m.load_percent}% of weekly capacity</small></div>
+    <div><strong>{m.name}</strong><small>{m.work_state==="busy"?"Active Chamber work":"No active work recorded"}</small></div>
+    <div className="board-load"><div><span style={{width:Math.min(100,m.load_percent)+"%"}}/></div><small>{m.load_percent}% of two-week nominal capacity</small></div>
    </div>)}</div>
-   <p className="board-policy">Based only on assigned work and manual timers. No activity surveillance.</p>
+   <p className="board-policy">Includes overdue and undated assignments. Estimates are based on nominal capacity, not actual availability or employee surveillance.</p>
   </section>}
   {privileged&&mode==="board"&&checked.length>0&&<div className="board-bulk">
    <span>{checked.length} selected</span><button onClick={()=>{setAssignOpen(true);setActiveId(checked[0])}} disabled={preview}>Assign selected</button>

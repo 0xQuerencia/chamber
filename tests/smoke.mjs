@@ -270,6 +270,9 @@ const verifiedManager=await call("/api/mfa/verify","POST",{
 },"");
 ok(verifiedManager);
 const managerCookie=verifiedManager.res.headers.get("set-cookie").split(";")[0];
+const managerLoad=ok(await call("/api/workload","GET",undefined,managerCookie));
+assert.ok(managerLoad.members.some(m=>m.id===reportStaff.id));
+assert.ok(managerLoad.members.every(m=>[reportStaff.id,teamManager.id].includes(m.id)),"Manager workload must not expose outside staff");
 const managerSnapshot=ok(await call("/api/bootstrap","GET",undefined,managerCookie));
 assert.ok(managerSnapshot.clients.some(c=>c.id===managedClient.id));
 assert.equal(managerSnapshot.clients.some(c=>c.id===privateClient.id),false);
