@@ -116,3 +116,6 @@
 .tp-voucher-preview{padding:6px 8px;margin-top:8px;font-size:12px;line-height:1.5}
 .tp-voucher-preview p{margin:2px 0 0}
 .tp-voucher-foot{font-size:12px;margin:8px 0;color:var(--tp-toolbar-dark)}
+
+.tp-report-head,.tp-report-filters{flex-wrap:wrap}
+.tp-report-filters select{max-width:160px;font:inherit;border:1px solid var(--tp-border);background:#fff;color:#24313c;padding:2px 5px;border-radius:0}
