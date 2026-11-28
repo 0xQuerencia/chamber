@@ -16,6 +16,7 @@ import MfaAuth from "./MfaAuth";
 import SecurityLog from "./SecurityLog";
 import Onboarding from "./Onboarding";
 import ComplianceRules from "./ComplianceRules";
+import FilingRegister from "./FilingRegister";
 import ClientPortal from "./ClientPortal";
 import {goShortcuts,isTextInteraction} from "./keyboard";
 import DeviceManager from "./DeviceManager";
@@ -96,6 +97,7 @@ export default function App(){
  const [datePickerOpen,setDatePickerOpen]=useState(false);
  const [firmPickerOpen,setFirmPickerOpen]=useState(false);
  const [expandedTracker,setExpandedTracker]=useState(false);
+ const [filingRegister,setFilingRegister]=useState(false);
  const [expandedRequest,setExpandedRequest]=useState(false);
  const [expandedDocuments,setExpandedDocuments]=useState(false);
  const [view,setView]=useState<View>("desk");
@@ -132,7 +134,7 @@ export default function App(){
   void getSession().then(async s=>{if(!alive)return;setSession(s);if(s.authenticated){const d=await getWorkspace();if(alive){setWorkspace(d);setLoadedAt(new Date().toLocaleString("en-IN"))}}}).catch(e=>{if(alive){setError(String(e));setSession({authenticated:false,needs_setup:false,user:null})}});
   return()=>{alive=false};
  },[enterPreview]);
- const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false);setExpandedTracker(false);setExpandedRequest(false);setExpandedDocuments(false)},[]);
+ const navigate=useCallback((next:View)=>{setView(next);setSelected(null);setQuery("");setWorkFilter("all");setMobileNavOpen(false);setExpandedTracker(false);setExpandedRequest(false);setExpandedDocuments(false);setFilingRegister(false)},[]);
  useEffect(()=>{
   const handler=(e:KeyboardEvent)=>{
    if(!workspace)return;
@@ -302,9 +304,10 @@ export default function App(){
   </>;
  }
  function showCompliance(){
+  if(privileged&&filingRegister)return <FilingRegister preview={preview} onBack={()=>setFilingRegister(false)}/>;
   const dates=workspace!.tasks.filter(t=>t.due_date&&t.status!=="done").slice().sort((a,b)=>(a.due_date??"").localeCompare(b.due_date??""));
   const columns:Column<Task>[]=[taskCols[0],taskCols[1],taskCols[3],taskCols[4]];
-  return <>{previewBanner()}<Heading title="Compliance Calendar" subtitle="Recurring work templates and firm-planned due dates" actions={<>{privileged&&<><Button kind="primary" onClick={()=>open("template")}><Plus size={16}/> New template</Button><Button onClick={()=>open("enrollment")}>Enroll client</Button><Button onClick={()=>open("requirement")}>Add requirement</Button><Button onClick={()=>open("override")}>Override date</Button></>}</>}/>
+  return <>{previewBanner()}<Heading title="Compliance Calendar" subtitle="Recurring work templates and firm-planned due dates" actions={<>{privileged&&<><Button kind="primary" onClick={()=>open("template")}><Plus size={16}/> New template</Button><Button onClick={()=>open("enrollment")}>Enroll client</Button><Button onClick={()=>open("requirement")}>Add requirement</Button><Button onClick={()=>open("override")}>Override date</Button><Button onClick={()=>setFilingRegister(true)}>Filing evidence</Button></>}</>}/>
    <div className="notice" style={{marginBottom:17}}>Due days here are internal planning dates, not legally verified filing deadlines. Confirm statutory dates against the official rules.</div>
    <ComplianceRules principal={Boolean(principal)} preview={preview}/>
    <div className="split-grid"><Panel title="Recurring service templates">{workspace!.templates.length===0?<Empty title="No recurring templates"/>:workspace!.templates.map(t=><div className="stats-line" key={t.id}><div className="grow"><strong className="small">{t.name}</strong><p className="hint">{t.service} · {t.frequency} · planning day {t.due_day}</p></div><span className="badge-number">{workspace!.enrollments.filter((e:Enrollment)=>e.template_id===t.id&&e.active).length} clients</span>
