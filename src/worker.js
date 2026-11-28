@@ -3,6 +3,7 @@ import { validCalendarDate, shiftCalendarDays } from "./domain.js";
 import { handleWorkflow } from "./tracker.js";
 import { handleClientMaster } from "./clients.js";
 import { handleWork } from "./work.js";
+import { handleFilings } from "./filings.js";
 import { handleImports } from "./imports.js";
 import { handleMessages } from "./messages.js";
 import { handleReports } from "./reports.js";
@@ -469,6 +470,7 @@ async function api(request,env) {
     if(path==="/api/bootstrap"&&method==="GET") return bootstrap(env.DB,user);
     if(path.startsWith("/api/security/"))return handleSecurity(request,env,user,{output,fail,clean});
     if(path==="/api/onboarding"||path==="/api/onboarding/profile")return handleOnboarding(request,env,user,{output,fail,clean,audit,iso,bodyJSON,validEmail});
+    if(path==="/api/filings"||path.startsWith("/api/filings/"))return handleFilings(request,env,user,{output,fail,clean,audit,id,iso,bodyJSON});
     if(path.startsWith("/api/compliance/"))return handleCompliance(request,env,user,{output,fail,clean,bodyJSON,audit,id,iso});
     if(path==="/api/portal/links"||/^\/api\/portal\/links\/[a-f0-9-]+\/revoke$/.test(path))
       return handlePortalLinks(request,env,user,{output,fail,clean,audit,bodyJSON});
