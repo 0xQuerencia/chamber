@@ -17,7 +17,8 @@ function pending(doc:Requirement){return !["received","verified","not_applicable
 function monthLabel(d:Date){return d.toLocaleDateString("en-IN",{month:"short",year:"2-digit"}).replace(" ","-");}
 function monthKey(d:Date){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
 function periodKey(raw:string|null){if(!raw)return null;if(/^\d{4}-\d{2}$/.test(raw))return raw;const m=/^([A-Za-z]{3})\s+(\d{4})$/.exec(raw);if(!m)return null;const i=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(m[1].toLowerCase());return i<0?null:m[2]+"-"+String(i+1).padStart(2,"0");}
-function allPeriods(){const now=new Date();return Array.from({length:5},(_,i)=>new Date(now.getFullYear(),now.getMonth()-4+i,1));}
+function currentFY(){const now=new Date();return now.getFullYear()-(now.getMonth()<3?1:0);}
+function allPeriods(year:number){return Array.from({length:12},(_,i)=>new Date(year,3+i,1));}
 
 export function TallyGateway({workspace,onNavigate,preview}:Props){
  const [cursor,setCursor]=useState(3);
@@ -58,21 +59,46 @@ export function TallyGateway({workspace,onNavigate,preview}:Props){
 
 type GridProps=Props & {onOpenRecord:(view:View)=>void};
 export function TallyDataGrid({workspace,onNavigate,onOpenRecord,preview}:GridProps){
- const months=useMemo(allPeriods,[]);
+ const [year,setYear]=useState(currentFY);
+ const months=useMemo(()=>allPeriods(year),[year]);
  const [row,setRow]=useState(0);
- const [col,setCol]=useState(3);
+ const [col,setCol]=useState(()=>((new Date().getMonth()+9)%12));
  const [clientFilter,setClientFilter]=useState("");
  const [onlyPending,setOnlyPending]=useState(false);
- const clients=useMemo(()=>workspace.clients.filter(c=>c.name.toLowerCase().includes(clientFilter.toLowerCase())&&(!onlyPending||workspace.documents.some(d=>d.client_id===c.id&&pending(d)))),[workspace,clientFilter,onlyPending]);
+ const [service,setService]=useState("");
+ const services=useMemo(()=>Array.from(new Set(workspace.tasks.map(t=>t.service))).sort(),[workspace.tasks]);
+ const grid=useMemo(()=>{
+  const byTask=new Map(workspace.tasks.filter(t=>!service||t.service===service).map(t=>[t.id,t]));
+  const cells=new Map<string,Requirement[]>();
+  const pendingByClient=new Map<string,number>();
+  const pendingByPeriod=new Map<string,number>();
+  const periodSet=new Set(months.map(monthKey));
+  const taskCells=new Set<string>();
+  for(const t of byTask.values()){
+   const period=periodKey(t.period);
+   if(period&&periodSet.has(period))taskCells.add(t.client_id+"|"+period);
+  }
+  for(const d of workspace.documents){
+   const t=byTask.get(d.task_id),period=t&&periodKey(t.period);
+   if(!t||!period||!periodSet.has(period))continue;
+   const key=t.client_id+"|"+period,items=cells.get(key)||[];
+   items.push(d);cells.set(key,items);
+   if(pending(d))pendingByClient.set(t.client_id,(pendingByClient.get(t.client_id)||0)+1);
+  }
+  const clients=workspace.clients.filter(c=>c.name.toLowerCase().includes(clientFilter.trim().toLowerCase())&&(!onlyPending||(pendingByClient.get(c.id)||0)>0));
+  for(const c of clients)for(const period of periodSet){
+   const count=(cells.get(c.id+"|"+period)||[]).filter(pending).length;
+   pendingByPeriod.set(period,(pendingByPeriod.get(period)||0)+count);
+  }
+  return {clients,cells,taskCells,pendingByClient,pendingByPeriod,total:clients.reduce((n,c)=>n+(pendingByClient.get(c.id)||0),0)};
+ },[workspace,months,service,clientFilter,onlyPending]);
+ const clients=grid.clients;
  const selected=clients[Math.max(0,Math.min(row,clients.length-1))];
  const selectedPeriod=months[col]&&monthKey(months[col]);
- const docsFor=(cid:string,period:string)=>{
-  const taskIDs=new Set(workspace.tasks.filter(t=>t.client_id===cid&&periodKey(t.period)===period).map(t=>t.id));
-  return workspace.documents.filter(d=>d.client_id===cid&&taskIDs.has(d.task_id));
- };
+ const docsFor=(cid:string,period:string)=>grid.cells.get(cid+"|"+period)||[];
  function cell(cid:string,month:string){
   const docs=docsFor(cid,month);
-  if(!docs.length)return "–";
+  if(!docs.length)return grid.taskCells.has(cid+"|"+month)?"?":"–";
   const complete=docs.filter(d=>!pending(d)).length;
   return (complete===docs.length?"✓ ":complete===0?"✕ ":"◐ ")+complete+"/"+docs.length;
  }
@@ -90,13 +116,13 @@ export function TallyDataGrid({workspace,onNavigate,onOpenRecord,preview}:GridPr
  },[clients.length,months.length,onOpenRecord]);
  return <div className="tp-report">
    <div className="tp-report-head">
-    <span>Period: <b>FY {getFY(new Date())}</b> · Client: <b>{clientFilter||"All"}</b> · Status: <b>{onlyPending?"Pending":"All"}</b></span>
-    <div className="tp-report-filters"><label>Client <input value={clientFilter} onChange={e=>{setClientFilter(e.target.value);setRow(0)}} placeholder="Filter..." aria-label="Filter clients"/></label><label><input type="checkbox" checked={onlyPending} onChange={e=>{setOnlyPending(e.target.checked);setRow(0)}}/> Pending only</label></div>
+    <span>Period: <b>FY {year}–{String(year+1).slice(-2)}</b> · Client: <b>{clientFilter||"All"}</b> · Status: <b>{onlyPending?"Pending":"All"}</b></span>
+    <div className="tp-report-filters"><label>FY <select aria-label="Financial year" value={year} onChange={e=>{setYear(Number(e.target.value));setCol(0);setRow(0)}}>{Array.from({length:8},(_,i)=>currentFY()-5+i).map(y=><option key={y} value={y}>{y}–{String(y+1).slice(-2)}</option>)}</select></label><label>Service <select aria-label="Service" value={service} onChange={e=>{setService(e.target.value);setRow(0)}}><option value="">All services</option>{services.map(s=><option key={s} value={s}>{s}</option>)}</select></label><label>Client <input value={clientFilter} onChange={e=>{setClientFilter(e.target.value);setRow(0)}} placeholder="Filter..." aria-label="Filter clients"/></label><label><input type="checkbox" checked={onlyPending} onChange={e=>{setOnlyPending(e.target.checked);setRow(0)}}/> Pending only</label></div>
    </div>
    <div className="tp-report-layout">
     <div className="tp-sheet tp-report-grid"><table><thead><tr><th>Particulars</th>{months.map(m=><th key={monthKey(m)} className="tp-num">{monthLabel(m)}</th>)}<th className="tp-num">Pending</th></tr></thead><tbody>
-     {clients.map((c,ri)=><tr key={c.id}><td className={ri===row?"tp-selected":""}><button className="tp-cell-button" onClick={()=>setRow(ri)}>{c.name}</button></td>{months.map((m,mi)=><td key={monthKey(m)} className={"tp-num "+(ri===row&&mi===col?"tp-selected":"")}><button className="tp-cell-button" onClick={()=>{setRow(ri);setCol(mi)}} onDoubleClick={()=>onOpenRecord("tracker")}>{cell(c.id,monthKey(m))}</button></td>)}<td className="tp-num">{workspace.documents.filter(d=>d.client_id===c.id&&pending(d)).length}</td></tr>)}
-     <tr className="tp-total"><td>Total pending items</td>{months.map(m=><td key={monthKey(m)} className="tp-num">{workspace.documents.filter(d=>workspace.tasks.some(t=>t.id===d.task_id&&periodKey(t.period)===monthKey(m))&&pending(d)).length}</td>)}<td className="tp-num">{workspace.documents.filter(pending).length}</td></tr>
+     {clients.map((c,ri)=><tr key={c.id}><td className={ri===row?"tp-selected":""}><button className="tp-cell-button" onClick={()=>setRow(ri)}>{c.name}</button></td>{months.map((m,mi)=><td key={monthKey(m)} className={"tp-num "+(ri===row&&mi===col?"tp-selected":"")}><button className="tp-cell-button" onClick={()=>{setRow(ri);setCol(mi)}} onDoubleClick={()=>onOpenRecord("tracker")}>{cell(c.id,monthKey(m))}</button></td>)}<td className="tp-num">{grid.pendingByClient.get(c.id)||0}</td></tr>)}
+     <tr className="tp-total"><td>Total pending items</td>{months.map(m=><td key={monthKey(m)} className="tp-num">{grid.pendingByPeriod.get(monthKey(m))||0}</td>)}<td className="tp-num">{grid.total}</td></tr>
      </tbody></table>
      {clients.length===0&&<p className="tp-empty">No clients match this filter.</p>}
     </div>
@@ -106,7 +132,7 @@ export function TallyDataGrid({workspace,onNavigate,onOpenRecord,preview}:GridPr
       </div>
     </aside>
    </div>
-   <p className="tp-subnote">{preview?"Read-only sample. ":""}Select a cell with ↑↓←→, Enter opens the detailed register.</p>
+   <p className="tp-subnote">{preview?"Read-only sample. ":""}✓ Received / waived · ◐ Partial · ✕ Missing · ? Assignment without checklist · – No monthly assignment. Totals reflect the visible filters and financial year. This compact register uses loaded workspace records; open the full tracker for paginated results.</p>
   </div>;
 }
 
